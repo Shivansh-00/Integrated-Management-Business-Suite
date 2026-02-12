@@ -1,0 +1,11 @@
+{
+  "layout": "modern",
+  "theme": "dark",
+  "cards": [
+    "revenue_run_rate",
+    "net_margin",
+    "risk_exposure",
+    "forecast_accuracy"
+  ],
+  "real_time": true
+}

@@ -1,0 +1,10 @@
+:root {
+  --imbs-bg: #0f172a;
+  --imbs-panel: #1e293b;
+  --imbs-text: #e2e8f0;
+}
+
+body[data-theme="dark"] {
+  background: var(--imbs-bg);
+  color: var(--imbs-text);
+}
