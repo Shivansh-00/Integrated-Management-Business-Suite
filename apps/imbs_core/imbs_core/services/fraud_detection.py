@@ -1,6 +1,3 @@
-import frappe
-
-
 def isolation_forest_score(payload: dict):
     """Placeholder for sklearn IsolationForest service integration."""
     amount = float(payload.get("amount", 0))

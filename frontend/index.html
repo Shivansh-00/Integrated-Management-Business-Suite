@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="IMBS — AI-first Enterprise Resource Planning Platform">
+    <meta name="theme-color" content="#06080f">
+    <title>IMBS — Integrated Management Business Suite</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>◆</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body data-theme="dark">
+
+<!-- ══════════════════════════════════════════════════════════════════
+     AUTH OVERLAY — Login / Register
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="auth-overlay" id="authOverlay">
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-brand">
+                <div class="auth-brand__logo">◆</div>
+                <div class="auth-brand__title">IMBS</div>
+                <div class="auth-brand__subtitle">Integrated Management Business Suite</div>
+            </div>
+
+            <!-- Login Form -->
+            <form class="auth-form" id="loginForm" onsubmit="return IMBS.auth.login(event)">
+                <div class="form-group">
+                    <label for="loginUsername">Username</label>
+                    <input type="text" id="loginUsername" placeholder="Enter username" autocomplete="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" placeholder="Enter password" autocomplete="current-password" required>
+                </div>
+                <div class="form-group" id="totpGroup" style="display:none">
+                    <label for="loginTotp">2FA Code</label>
+                    <input type="text" id="loginTotp" placeholder="6-digit TOTP code" maxlength="6" inputmode="numeric" autocomplete="one-time-code">
+                </div>
+                <div class="auth-error" id="loginError"></div>
+                <button type="submit" class="btn btn--primary" style="width:100%" id="loginBtn">Sign In</button>
+                <div class="auth-footer">
+                    Don't have an account? <a onclick="IMBS.auth.showRegister()">Create one</a>
+                </div>
+            </form>
+
+            <!-- Register Form -->
+            <form class="auth-form" id="registerForm" style="display:none" onsubmit="return IMBS.auth.register(event)">
+                <div class="form-group">
+                    <label for="regUsername">Username</label>
+                    <input type="text" id="regUsername" placeholder="Choose username" autocomplete="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="regEmail">Email</label>
+                    <input type="email" id="regEmail" placeholder="you@company.com" autocomplete="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="regPassword">Password</label>
+                    <input type="password" id="regPassword" placeholder="Min 8 chars, mixed case + number" autocomplete="new-password" required minlength="8">
+                    <div class="password-strength" id="passwordStrength"></div>
+                </div>
+                <div class="auth-error" id="registerError"></div>
+                <button type="submit" class="btn btn--primary" style="width:100%" id="regBtn">Create Account</button>
+                <div class="auth-footer">
+                    Already have an account? <a onclick="IMBS.auth.showLogin()">Sign in</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     MAIN APP LAYOUT — Sidebar + Content
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="app-layout" id="appLayout" style="display:none">
+
+    <!-- ===== SIDEBAR ===== -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar__brand">
+            <div class="sidebar__logo">◆</div>
+            <div class="sidebar__brand-text">
+                <span class="sidebar__brand-name">IMBS</span>
+                <span class="sidebar__brand-sub">Enterprise Suite</span>
+            </div>
+        </div>
+
+        <nav class="sidebar__nav">
+            <div class="sidebar__section-label">Main</div>
+            <a class="nav-item active" data-page="dashboard" onclick="IMBS.nav.goto('dashboard')">
+                <span class="nav-item__icon">📊</span>
+                <span class="nav-item__label">Dashboard</span>
+            </a>
+            <a class="nav-item" data-page="analytics" onclick="IMBS.nav.goto('analytics')">
+                <span class="nav-item__icon">📈</span>
+                <span class="nav-item__label">Analytics</span>
+            </a>
+            <a class="nav-item" data-page="ai-insights" onclick="IMBS.nav.goto('ai-insights')">
+                <span class="nav-item__icon">🤖</span>
+                <span class="nav-item__label">AI Insights</span>
+                <span class="nav-item__badge" id="insightsBadge" style="display:none">0</span>
+            </a>
+
+            <div class="sidebar__section-label">Operations</div>
+            <a class="nav-item" data-page="risk" onclick="IMBS.nav.goto('risk')">
+                <span class="nav-item__icon">⚠️</span>
+                <span class="nav-item__label">Risk & Fraud</span>
+            </a>
+            <a class="nav-item" data-page="compliance" onclick="IMBS.nav.goto('compliance')">
+                <span class="nav-item__icon">✅</span>
+                <span class="nav-item__label">Compliance</span>
+            </a>
+            <a class="nav-item" data-page="pricing" onclick="IMBS.nav.goto('pricing')">
+                <span class="nav-item__icon">💰</span>
+                <span class="nav-item__label">Dynamic Pricing</span>
+            </a>
+            <a class="nav-item" data-page="budget" onclick="IMBS.nav.goto('budget')">
+                <span class="nav-item__icon">📋</span>
+                <span class="nav-item__label">Budget Optimizer</span>
+            </a>
+            <a class="nav-item" data-page="leads" onclick="IMBS.nav.goto('leads')">
+                <span class="nav-item__icon">🎯</span>
+                <span class="nav-item__label">Lead Scoring</span>
+            </a>
+
+            <div class="sidebar__section-label">System</div>
+            <a class="nav-item" data-page="events" onclick="IMBS.nav.goto('events')">
+                <span class="nav-item__icon">📡</span>
+                <span class="nav-item__label">Event Stream</span>
+                <span class="nav-item__badge" id="eventBadge" style="display:none">0</span>
+            </a>
+            <a class="nav-item" data-page="system" onclick="IMBS.nav.goto('system')">
+                <span class="nav-item__icon">🔧</span>
+                <span class="nav-item__label">System Health</span>
+            </a>
+            <a class="nav-item" data-page="audit" onclick="IMBS.nav.goto('audit')">
+                <span class="nav-item__icon">🔒</span>
+                <span class="nav-item__label">Audit Log</span>
+            </a>
+        </nav>
+
+        <div class="sidebar__footer">
+            <div class="sidebar__user" onclick="IMBS.auth.showProfile()">
+                <div class="sidebar__avatar" id="userAvatar">A</div>
+                <div class="sidebar__user-info">
+                    <div class="sidebar__user-name" id="userName">Admin</div>
+                    <div class="sidebar__user-role" id="userRole">admin</div>
+                </div>
+            </div>
+            <button class="sidebar__toggle" onclick="IMBS.nav.toggleSidebar()">
+                <span id="sidebarToggleLabel">◁ Collapse</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- ===== MAIN CONTENT AREA ===== -->
+    <div class="main-content">
+
+        <!-- TOPBAR -->
+        <header class="topbar">
+            <div class="topbar__left">
+                <button class="topbar__btn" onclick="IMBS.nav.toggleSidebar()" aria-label="Toggle sidebar" style="display:none" id="mobileMenuBtn">☰</button>
+                <div class="topbar__breadcrumb">
+                    <span>IMBS</span>
+                    <span>›</span>
+                    <span class="topbar__breadcrumb-current" id="breadcrumb">Dashboard</span>
+                </div>
+            </div>
+            <div class="topbar__right">
+                <div class="status-indicator status-indicator--connecting" id="wsStatus">
+                    <span class="status-dot"></span>
+                    <span id="wsStatusText">Connecting</span>
+                </div>
+                <button class="topbar__btn" onclick="IMBS.kpi.refreshAll()" title="Refresh KPIs">↻ Refresh</button>
+                <button class="notification-btn" onclick="IMBS.notifications.toggle()" title="Notifications" id="notifBtn">
+                    🔔
+                    <span class="notification-badge" id="notifBadge" style="display:none">0</span>
+                </button>
+                <button class="theme-toggle" onclick="IMBS.theme.toggle()" title="Toggle theme" id="themeBtn">🌙</button>
+                <a class="topbar__btn" href="/api/docs" target="_blank">API Docs</a>
+                <button class="topbar__btn btn--danger" onclick="IMBS.auth.logout()" title="Sign out">Sign Out</button>
+            </div>
+        </header>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PAGE: DASHBOARD
+             ═══════════════════════════════════════════════════════════ -->
+        <main class="dashboard" id="page-dashboard">
+            <div class="dashboard__header">
+                <h1 class="dashboard__title">Enterprise Command Center</h1>
+                <p class="dashboard__subtitle">Real-time business intelligence • Last update: <span id="lastUpdate">—</span></p>
+            </div>
+
+            <!-- KPI CARDS -->
+            <section class="kpi-grid" id="kpiGrid">
+                <div class="kpi-card" data-kpi="revenue_run_rate">
+                    <div class="kpi-card__icon kpi-card__icon--blue">💎</div>
+                    <div class="kpi-card__label">Revenue Run Rate</div>
+                    <div class="kpi-card__value" id="kpi-revenue">—</div>
+                    <div class="kpi-card__trend kpi-card__trend--up" id="trend-revenue">↑ 8.2%</div>
+                </div>
+                <div class="kpi-card" data-kpi="net_margin">
+                    <div class="kpi-card__icon kpi-card__icon--green">📈</div>
+                    <div class="kpi-card__label">Net Margin</div>
+                    <div class="kpi-card__value" id="kpi-margin">—</div>
+                    <div class="kpi-card__trend kpi-card__trend--up" id="trend-margin">↑ 1.4%</div>
+                </div>
+                <div class="kpi-card" data-kpi="risk_exposure">
+                    <div class="kpi-card__icon kpi-card__icon--red">⚡</div>
+                    <div class="kpi-card__label">Risk Exposure</div>
+                    <div class="kpi-card__value" id="kpi-risk">—</div>
+                    <div class="kpi-card__trend kpi-card__trend--down" id="trend-risk">↓ 3.1%</div>
+                </div>
+                <div class="kpi-card" data-kpi="forecast_accuracy">
+                    <div class="kpi-card__icon kpi-card__icon--cyan">🎯</div>
+                    <div class="kpi-card__label">Forecast Accuracy</div>
+                    <div class="kpi-card__value" id="kpi-forecast">—</div>
+                    <div class="kpi-card__trend kpi-card__trend--up" id="trend-forecast">↑ 0.5%</div>
+                </div>
+                <div class="kpi-card" data-kpi="compliance_score">
+                    <div class="kpi-card__icon kpi-card__icon--purple">🛡️</div>
+                    <div class="kpi-card__label">Compliance Score</div>
+                    <div class="kpi-card__value" id="kpi-compliance">—</div>
+                    <div class="kpi-card__trend kpi-card__trend--up" id="trend-compliance">↑ 2.0%</div>
+                </div>
+                <div class="kpi-card" data-kpi="fraud_blocked">
+                    <div class="kpi-card__icon kpi-card__icon--yellow">🔍</div>
+                    <div class="kpi-card__label">Fraud Blocked</div>
+                    <div class="kpi-card__value" id="kpi-fraud">—</div>
+                    <div class="kpi-card__trend kpi-card__trend--neutral" id="trend-fraud">this month</div>
+                </div>
+            </section>
+
+            <!-- ROW: Forecast + Copilot -->
+            <div class="panels">
+                <section class="panel" id="forecastPanel">
+                    <div class="panel__header">
+                        <h2 class="panel__title">📈 Sales Forecast</h2>
+                        <select id="forecastPeriods" class="select--sm" onchange="IMBS.forecast.load()">
+                            <option value="6">6 months</option>
+                            <option value="12" selected>12 months</option>
+                            <option value="24">24 months</option>
+                        </select>
+                    </div>
+                    <div class="panel__body">
+                        <canvas id="forecastChart" height="280"></canvas>
+                    </div>
+                </section>
+
+                <section class="panel" id="copilotPanel">
+                    <div class="panel__header">
+                        <h2 class="panel__title">🤖 AI Copilot</h2>
+                        <span class="badge" id="copilotConfidence" style="display:none">95% confidence</span>
+                    </div>
+                    <div class="panel__body copilot">
+                        <div class="copilot__messages" id="copilotMessages">
+                            <div class="copilot__msg copilot__msg--bot">
+                                Welcome to IMBS AI Copilot. Ask me about KPIs, risks, forecasts, or compliance.
+                            </div>
+                        </div>
+                        <div class="copilot__input-row">
+                            <input type="text" id="copilotInput" class="copilot__input input--sm"
+                                   placeholder="Ask about your business data…"
+                                   onkeydown="if(event.key==='Enter')IMBS.copilot.ask()">
+                            <button class="btn btn--primary btn--sm" onclick="IMBS.copilot.ask()">Send</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PAGE: ANALYTICS
+             ═══════════════════════════════════════════════════════════ -->
+        <main class="dashboard" id="page-analytics" style="display:none">
+            <div class="dashboard__header">
+                <h1 class="dashboard__title">Analytics & Forecasting</h1>
+                <p class="dashboard__subtitle">Predictive models and trend analysis</p>
+            </div>
+            <div class="panels">
+                <section class="panel panel--full">
+                    <div class="panel__header">
+                        <h2 class="panel__title">📈 Extended Forecast</h2>
+                        <select id="analyticsperiods" class="select--sm" onchange="IMBS.forecast.loadAnalytics()">
+                            <option value="6">6 months</option>
+                            <option value="12">12 months</option>
+                            <option value="24" selected>24 months</option>
+                        </select>
+                    </div>
+                    <div class="panel__body">
+                        <canvas id="analyticsChart" height="320"></canvas>
+                    </div>
+                </section>
+            </div>
+            <div class="panels">
+                <section class="panel">
+                    <div class="panel__header"><h2 class="panel__title">📊 KPI History</h2></div>
+                    <div class="panel__body">
+                        <canvas id="kpiHistoryChart" height="260"></canvas>
+                    </div>
+                </section>
+                <section class="panel">
+                    <div class="panel__header"><h2 class="panel__title">🎯 Model Performance</h2></div>
+                    <div class="panel__body" id="modelPerformance">
+                        <div class="health-grid">
+                            <div class="health-item">
+                                <div class="health-item__label">Model Accuracy</div>
+                                <div class="health-item__value text-accent">94.7%</div>
+                                <div class="health-item__bar"><div class="health-item__bar-fill health-item__bar-fill--good" style="width:94.7%"></div></div>
+                            </div>
+                            <div class="health-item">
+                                <div class="health-item__label">Confidence Interval</div>
+                                <div class="health-item__value">±4.2%</div>
+                                <div class="health-item__bar"><div class="health-item__bar-fill health-item__bar-fill--good" style="width:85%"></div></div>
+                            </div>
+                            <div class="health-item">
+                                <div class="health-item__label">Training Data Points</div>
+                                <div class="health-item__value">12,847</div>
+                                <div class="health-item__bar"><div class="health-item__bar-fill health-item__bar-fill--good" style="width:90%"></div></div>
+                            </div>
+                            <div class="health-item">
+                                <div class="health-item__label">Last Retrained</div>
+                                <div class="health-item__value">2h ago</div>
+                                <div class="health-item__bar"><div class="health-item__bar-fill health-item__bar-fill--good" style="width:95%"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PAGE: AI INSIGHTS
+             ═══════════════════════════════════════════════════════════ -->
+        <main class="dashboard" id="page-ai-insights" style="display:none">
+            <div class="dashboard__header">
+                <h1 class="dashboard__title">AI Intelligence Hub</h1>
+                <p class="dashboard__subtitle">Machine-learning driven insights and anomaly detection</p>
+            </div>
+            <div class="panels">
+                <section class="panel panel--full">
+                    <div class="panel__header">
+                        <h2 class="panel__title">🧠 AI Insights</h2>
+                        <button class="btn btn--sm" onclick="IMBS.ai.loadInsights()">↻ Refresh</button>
+                    </div>
+                    <div class="panel__body">
+                        <div class="insights-grid" id="insightsGrid">
+                            <div class="skeleton skeleton--card"></div>
+                            <div class="skeleton skeleton--card"></div>
+                            <div class="skeleton skeleton--card"></div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+            <div class="panels">
+                <section class="panel">
+                    <div class="panel__header">
+                        <h2 class="panel__title">🔴 Anomaly Detection</h2>
+                        <button class="btn btn--sm" onclick="IMBS.ai.loadAnomalies()">Scan Now</button>
+                    </div>
+                    <div class="panel__body">
+                        <div id="anomalyResults">
+                            <div class="skeleton skeleton--card"></div>
+                        </div>
+                    </div>
+                </section>
+                <section class="panel">
+                    <div class="panel__header"><h2 class="panel__title">🤖 AI Copilot</h2></div>
+                    <div class="panel__body copilot">
+                        <div class="copilot__messages" id="copilotMessages2">
+                            <div class="copilot__msg copilot__msg--bot">Ask me anything about your business intelligence data.</div>
+                        </div>
+                        <div class="copilot__input-row">
+                            <input type="text" id="copilotInput2" class="copilot__input input--sm"
+                                   placeholder="Analyze trends, risks, anomalies…"
+                                   onkeydown="if(event.key==='Enter')IMBS.copilot.ask('copilotInput2','copilotMessages2')">
+                            <button class="btn btn--primary btn--sm" onclick="IMBS.copilot.ask('copilotInput2','copilotMessages2')">Send</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PAGE: RISK & FRAUD
+             ═══════════════════════════════════════════════════════════ -->
+        <main class="dashboard" id="page-risk" style="display:none">
+            <div class="dashboard__header">
+                <h1 class="dashboard__title">Risk & Fraud Management</h1>
+                <p class="dashboard__subtitle">Real-time risk scoring and fraud detection engine</p>
+            </div>
+            <div class="panels">
+                <section class="panel">
+                    <div class="panel__header"><h2 class="panel__title">⚠️ Risk Scoring</h2></div>
+                    <div class="panel__body tool-form">
+                        <div class="form-row">
+                            <label>Voucher Type</label>
+                            <select id="riskVoucherType" class="select--sm">
+                                <option>Sales Invoice</option>
+                                <option>Purchase Invoice</option>
+                                <option>Journal Entry</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <label>Voucher No</label>
+                            <input type="text" id="riskVoucherNo" value="SINV-00042" class="input--sm">
+                        </div>
+                        <div class="form-row">
+                            <label>Amount (₹)</label>
+                            <input type="number" id="riskAmount" value="250000" class="input--sm">
+                        </div>
+                        <button class="btn btn--primary" onclick="IMBS.tools.scoreRisk()">Score Risk</button>
+                        <div class="result-box" id="riskResult"></div>
+                    </div>
+                </section>
+
+                <section class="panel">
+                    <div class="panel__header"><h2 class="panel__title">🔍 Fraud Detection</h2></div>
+                    <div class="panel__body tool-form">
+                        <div class="form-row">
+                            <label>Voucher No</label>
+                            <input type="text" id="fraudVoucherNo" value="SINV-00099" class="input--sm">
+                        </div>
+                        <div class="form-row">
+                            <label>Amount (₹)</label>
+                            <input type="number" id="fraudAmount" value="750000" class="input--sm">
+                        </div>
+                        <div class="form-row">
+                            <label>Velocity Index</label>
+                            <input type="number" id="fraudVelocity" value="0.6" step="0.1" class="input--sm">
+                        </div>
+                        <button class="btn btn--primary" onclick="IMBS.tools.detectFraud()">Detect Fraud</button>
+                        <div class="result-box" id="fraudResult"></div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PAGE: COMPLIANCE
+             ═══════════════════════════════════════════════════════════ -->
+        <main class="dashboard" id="page-compliance" style="display:none">
+            <div class="dashboard__header">
+                <h1 class="dashboard__title">Compliance Engine</h1>
+                <p class="dashboard__subtitle">Automated regulatory compliance verification</p>
+            </div>
+            <div class="panels">
+                <section class="panel">
+                    <div class="panel__header"><h2 class="panel__title">✅ Compliance Check</h2></div>
+                    <div class="panel__body tool-form">
+                        <div class="form-row">
+                            <label>Transaction Amount (₹)</label>
+                            <input type="number" id="compAmount" value="600000" class="input--sm">
+                        </div>
+                        <div class="form-row">
+                            <label>Approval Reference</label>
+                            <input type="text" id="compApproval" value="" placeholder="Leave empty to test violation" class="input--sm">
+                        </div>
+                        <button class="btn btn--primary" onclick="IMBS.tools.checkCompliance()">Check Compliance</button>
+                        <div class="result-box" id="complianceResult"></div>
+                    </div>
+                </section>
+                <section class="panel">
+                    <div class="panel__header"><h2 class="panel__title">🛡️ Compliance Score</h2></div>
+                    <div class="panel__body">
+                        <div class="health-grid">
+                            <div class="health-item">
+                                <div class="health-item__label">Overall Score</div>
+                                <div class="health-item__value" id="complianceScoreValue">97.1%</div>
+                                <div class="health-item__bar"><div class="health-item__bar-fill health-item__bar-fill--good" style="width:97.1%" id="complianceBar"></div></div>
+                            </div>
+                            <div class="health-item">
+                                <div class="health-item__label">Controls Passed</div>
+                                <div class="health-item__value">47 / 48</div>
+                            </div>
+                            <div class="health-item">
+                                <div class="health-item__label">Last Audit</div>
+                                <div class="health-item__value">3 days ago</div>
+                            </div>
+                            <div class="health-item">
+                                <div class="health-item__label">Next Review</div>
+                                <div class="health-item__value">Feb 24</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PAGE: DYNAMIC PRICING
+             ═══════════════════════════════════════════════════════════ -->
+        <main class="dashboard" id="page-pricing" style="display:none">
+            <div class="dashboard__header">
+                <h1 class="dashboard__title">Dynamic Pricing Engine</h1>
+                <p class="dashboard__subtitle">AI-driven price optimization</p>
+            </div>
+            <div class="panels">
+                <section class="panel">
+                    <div class="panel__header"><h2 class="panel__title">💰 Price Optimizer</h2></div>
+                    <div class="panel__body tool-form">
+                        <div class="form-row">
+                            <label>Base Price (₹)</label>
+                            <input type="number" id="pricingBase" value="1000" class="input--sm">
+                        </div>
+                        <div class="form-row">
+                            <label>Demand Index (0–1)</label>
+                            <input type="number" id="pricingDemand" value="0.7" step="0.1" min="0" max="1" class="input--sm">
+                        </div>
+                        <div class="form-row">
+                            <label>Stock Index (0–1)</label>
+                            <input type="number" id="pricingStock" value="0.3" step="0.1" min="0" max="1" class="input--sm">
+                        </div>
+                        <div class="form-row">
+                            <label>Competitor Index (0–1)</label>
+                            <input type="number" id="pricingComp" value="0.5" step="0.1" min="0" max="1" class="input--sm">
+                        </div>
+                        <button class="btn btn--primary" onclick="IMBS.tools.suggestPrice()">Get Optimized Price</button>
+                        <div class="result-box" id="pricingResult"></div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PAGE: BUDGET OPTIMIZER
+             ═══════════════════════════════════════════════════════════ -->
+        <main class="dashboard" id="page-budget" style="display:none">
+            <div class="dashboard__header">
+                <h1 class="dashboard__title">Budget Optimizer</h1>
+                <p class="dashboard__subtitle">AI-powered budget allocation and optimization</p>
+            </div>
+            <div class="panels">
+                <section class="panel">
+                    <div class="panel__header"><h2 class="panel__title">📊 Optimize Allocation</h2></div>
+                    <div class="panel__body tool-form">
+                        <div class="form-row">
+                            <label>Growth Target (%)</label>
+                            <input type="number" id="budgetGrowth" value="10" step="1" class="input--sm">
+                        </div>
+                        <div class="form-row">
+                            <label>Budget Lines (JSON)</label>
+                            <textarea id="budgetLines" class="input--sm" rows="4">[{"dept":"Engineering","amount":500000},{"dept":"Marketing","amount":300000},{"dept":"Sales","amount":200000}]</textarea>
+                        </div>
+                        <button class="btn btn--primary" onclick="IMBS.tools.optimizeBudget()">Optimize Budget</button>
+                        <div class="result-box" id="budgetResult"></div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PAGE: LEAD SCORING
+             ═══════════════════════════════════════════════════════════ -->
+        <main class="dashboard" id="page-leads" style="display:none">
+            <div class="dashboard__header">
+                <h1 class="dashboard__title">Lead Scoring Engine</h1>
+                <p class="dashboard__subtitle">ML-powered lead qualification and scoring</p>
+            </div>
+            <div class="panels">
+                <section class="panel">
+                    <div class="panel__header"><h2 class="panel__title">🎯 Score Lead</h2></div>
+                    <div class="panel__body tool-form">
+                        <div class="form-row">
+                            <label>Lead Name</label>
+                            <input type="text" id="leadName" value="Acme Corp" class="input--sm">
+                        </div>
+                        <div class="form-row">
+                            <label>Engagement (0–1)</label>
+                            <input type="number" id="leadEngagement" value="0.8" step="0.1" min="0" max="1" class="input--sm">
+                        </div>
+                        <div class="form-row">
+                            <label>Fit (0–1)</label>
+                            <input type="number" id="leadFit" value="0.9" step="0.1" min="0" max="1" class="input--sm">
+                        </div>
+                        <button class="btn btn--primary" onclick="IMBS.tools.scoreLead()">Score Lead</button>
+                        <div class="result-box" id="leadResult"></div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PAGE: EVENT STREAM
+             ═══════════════════════════════════════════════════════════ -->
+        <main class="dashboard" id="page-events" style="display:none">
+            <div class="dashboard__header">
+                <h1 class="dashboard__title">Live Event Stream</h1>
+                <p class="dashboard__subtitle">Real-time system events and activity log</p>
+            </div>
+            <div class="panels">
+                <section class="panel panel--full">
+                    <div class="panel__header">
+                        <h2 class="panel__title">📡 Events</h2>
+                        <span class="badge" id="eventCount">0 events</span>
+                    </div>
+                    <div class="panel__body">
+                        <div class="event-log" id="eventLog" style="max-height:500px">
+                            <div class="event-log__empty">Waiting for real-time events…</div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PAGE: SYSTEM HEALTH
+             ═══════════════════════════════════════════════════════════ -->
+        <main class="dashboard" id="page-system" style="display:none">
+            <div class="dashboard__header">
+                <h1 class="dashboard__title">System Health Monitor</h1>
+                <p class="dashboard__subtitle">Infrastructure status and performance metrics</p>
+            </div>
+            <div class="panels">
+                <section class="panel panel--full">
+                    <div class="panel__header">
+                        <h2 class="panel__title">🔧 System Status</h2>
+                        <button class="btn btn--sm" onclick="IMBS.system.checkHealth()">↻ Refresh</button>
+                    </div>
+                    <div class="panel__body">
+                        <div class="health-grid" id="healthGrid">
+                            <div class="skeleton skeleton--card"></div>
+                            <div class="skeleton skeleton--card"></div>
+                            <div class="skeleton skeleton--card"></div>
+                            <div class="skeleton skeleton--card"></div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+            <div class="panels">
+                <section class="panel panel--full">
+                    <div class="panel__header"><h2 class="panel__title">📊 API Status</h2></div>
+                    <div class="panel__body">
+                        <div class="result-box" id="apiStatusResult" style="max-height:400px">Loading system details…</div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PAGE: AUDIT LOG
+             ═══════════════════════════════════════════════════════════ -->
+        <main class="dashboard" id="page-audit" style="display:none">
+            <div class="dashboard__header">
+                <h1 class="dashboard__title">Security Audit Log</h1>
+                <p class="dashboard__subtitle">Complete audit trail for all authentication and security events</p>
+            </div>
+            <div class="panels">
+                <section class="panel panel--full">
+                    <div class="panel__header">
+                        <h2 class="panel__title">🔒 Audit Entries</h2>
+                        <button class="btn btn--sm" onclick="IMBS.audit.load()">↻ Refresh</button>
+                    </div>
+                    <div class="panel__body">
+                        <div class="event-log" id="auditLog" style="max-height:500px">
+                            <div class="event-log__empty">Loading audit log…</div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- FOOTER -->
+        <footer class="footer">
+            <span>IMBS v2.0.0 — AI-first Enterprise Resource Planning</span>
+            <span id="footerUpdate">Ready</span>
+        </footer>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     TOAST NOTIFICATION CONTAINER
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SCRIPTS
+     ══════════════════════════════════════════════════════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>
