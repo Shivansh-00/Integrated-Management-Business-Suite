@@ -1,0 +1,81 @@
+version: "3.9"
+
+x-common-env: &common-env
+  DB_HOST: mariadb
+  DB_PORT: "3306"
+  MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+  MARIADB_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+  REDIS_CACHE: redis://redis-cache:6379
+  REDIS_QUEUE: redis://redis-queue:6379
+  REDIS_SOCKETIO: redis://redis-socketio:6379
+  SOCKETIO_PORT: "9000"
+
+services:
+  mariadb:
+    image: mariadb:10.6
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis-cache:
+    image: redis:7-alpine
+    command: redis-server --save "" --appendonly no
+
+  redis-queue:
+    image: redis:7-alpine
+    command: redis-server --save "" --appendonly no
+
+  redis-socketio:
+    image: redis:7-alpine
+    command: redis-server --save "" --appendonly no
+
+  configurator:
+    image: frappe/bench:latest
+    entrypoint: ["bash", "-lc"]
+    command: >
+      bench set-config -g db_host mariadb;
+      bench set-config -g db_port 3306;
+      bench set-config -g redis_cache redis://redis-cache:6379;
+      bench set-config -g redis_queue redis://redis-queue:6379;
+      bench set-config -g redis_socketio redis://redis-socketio:6379;
+      bench set-config -g socketio_port 9000;
+      bench new-site ${SITE_NAME} --admin-password ${ADMIN_PASSWORD} --mariadb-root-password ${MYSQL_ROOT_PASSWORD};
+      bench --site ${SITE_NAME} install-app imbs_core;
+    environment:
+      <<: *common-env
+      SITE_NAME: ${SITE_NAME}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  backend:
+    image: frappe/bench:latest
+    command: ["bench", "start"]
+    environment:
+      <<: *common-env
+      FRAPPE_SITE_NAME_HEADER: ${SITE_NAME}
+    ports:
+      - "8000:8000"
+      - "9000:9000"
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+      - ./apps/imbs_core:/home/frappe/frappe-bench/apps/imbs_core
+    depends_on:
+      - configurator
+
+volumes:
+  mariadb_data:
+  sites:
+  logs:

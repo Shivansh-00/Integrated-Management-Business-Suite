@@ -1,0 +1,10 @@
+<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="IMBS logo">
+  <defs>
+    <linearGradient id="iconGrad" x1="18" y1="18" x2="78" y2="78" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4A86FF"/>
+      <stop offset="1" stop-color="#5D6CFF"/>
+    </linearGradient>
+  </defs>
+  <rect x="14" y="14" width="68" height="68" rx="17" fill="url(#iconGrad)"/>
+  <rect x="44" y="36" width="12" height="12" transform="rotate(45 44 36)" fill="#EEF2FF"/>
+</svg>

@@ -1,0 +1,48 @@
+{
+ "doctype": "Workflow",
+ "workflow_name": "AI Recommendation Lifecycle",
+ "document_type": "AI Recommendation",
+ "is_active": 1,
+ "states": [
+  {
+   "state": "Open",
+   "doc_status": "0",
+   "allow_edit": "AI Admin"
+  },
+  {
+   "state": "Accepted",
+   "doc_status": "0",
+   "allow_edit": "Business Analyst"
+  },
+  {
+   "state": "Rejected",
+   "doc_status": "0",
+   "allow_edit": "Business Analyst"
+  },
+  {
+   "state": "Applied",
+   "doc_status": "1",
+   "allow_edit": "System Manager"
+  }
+ ],
+ "transitions": [
+  {
+   "state": "Open",
+   "action": "Accept",
+   "next_state": "Accepted",
+   "allowed": "Business Analyst"
+  },
+  {
+   "state": "Open",
+   "action": "Reject",
+   "next_state": "Rejected",
+   "allowed": "Business Analyst"
+  },
+  {
+   "state": "Accepted",
+   "action": "Apply",
+   "next_state": "Applied",
+   "allowed": "System Manager"
+  }
+ ]
+}

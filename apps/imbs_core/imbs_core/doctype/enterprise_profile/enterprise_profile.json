@@ -1,0 +1,102 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-03-13 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "user",
+  "department",
+  "cost_center",
+  "risk_tolerance",
+  "timezone",
+  "preferred_dashboard",
+  "preferences_json",
+  "last_login_ip",
+  "is_active"
+ ],
+ "fields": [
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "label": "User",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "department",
+   "fieldtype": "Data",
+   "label": "Department"
+  },
+  {
+   "fieldname": "cost_center",
+   "fieldtype": "Data",
+   "label": "Cost Center"
+  },
+  {
+   "default": "Medium",
+   "fieldname": "risk_tolerance",
+   "fieldtype": "Select",
+   "label": "Risk Tolerance",
+   "options": "Low\nMedium\nHigh"
+  },
+  {
+   "default": "UTC",
+   "fieldname": "timezone",
+   "fieldtype": "Data",
+   "label": "Timezone"
+  },
+  {
+   "fieldname": "preferred_dashboard",
+   "fieldtype": "Data",
+   "label": "Preferred Dashboard"
+  },
+  {
+   "fieldname": "preferences_json",
+   "fieldtype": "Long Text",
+   "label": "Preferences JSON"
+  },
+  {
+   "fieldname": "last_login_ip",
+   "fieldtype": "Data",
+   "label": "Last Login IP"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Is Active"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 0,
+ "module": "IMBS Core",
+ "name": "Enterprise Profile",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "role": "AI Admin"
+  },
+  {
+   "read": 1,
+   "role": "Employee"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

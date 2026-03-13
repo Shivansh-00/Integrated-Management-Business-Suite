@@ -1,0 +1,92 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-03-13 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "company",
+  "context_type",
+  "recommendation_code",
+  "confidence",
+  "status",
+  "payload",
+  "generated_at"
+ ],
+ "fields": [
+  {
+   "default": "Default Company",
+   "fieldname": "company",
+   "fieldtype": "Data",
+   "label": "Company"
+  },
+  {
+   "fieldname": "context_type",
+   "fieldtype": "Select",
+   "label": "Context Type",
+   "options": "Finance\nRisk\nOperations\nSales\nCompliance",
+   "reqd": 1
+  },
+  {
+   "fieldname": "recommendation_code",
+   "fieldtype": "Data",
+   "label": "Recommendation Code",
+   "reqd": 1
+  },
+  {
+   "default": "0.5",
+   "fieldname": "confidence",
+   "fieldtype": "Float",
+   "label": "Confidence"
+  },
+  {
+   "default": "Open",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Open\nAccepted\nRejected\nApplied"
+  },
+  {
+   "fieldname": "payload",
+   "fieldtype": "Long Text",
+   "label": "Payload"
+  },
+  {
+   "fieldname": "generated_at",
+   "fieldtype": "Datetime",
+   "label": "Generated At"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 0,
+ "module": "IMBS Core",
+ "name": "AI Recommendation",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "report": 1,
+   "role": "AI Admin",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Business Analyst"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

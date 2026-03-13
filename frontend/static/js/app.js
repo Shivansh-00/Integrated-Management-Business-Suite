@@ -155,7 +155,7 @@ const IMBS = (() => {
             const container = $("toastContainer");
             if (!container) return;
 
-            const icons = { info: "ℹ️", success: "✅", warning: "⚠️", error: "❌" };
+            const icons = { info: "IN", success: "OK", warning: "AL", error: "ER" };
             const id = `toast-${++this._count}`;
 
             const el = document.createElement("div");
@@ -620,20 +620,20 @@ const IMBS = (() => {
                         {
                             label: "Predicted Revenue",
                             data: predicted,
-                            borderColor: "#3b82f6",
-                            backgroundColor: "rgba(59,130,246,0.08)",
+                            borderColor: "#22d3ee",
+                            backgroundColor: "rgba(34,211,238,0.1)",
                             fill: false,
                             tension: 0.35,
                             pointRadius: 4,
                             pointHoverRadius: 7,
-                            pointBackgroundColor: "#3b82f6",
+                            pointBackgroundColor: "#22d3ee",
                             borderWidth: 2.5,
                         },
                         {
                             label: "Upper CI",
                             data: upperCI,
-                            borderColor: "rgba(16,185,129,0.4)",
-                            backgroundColor: "rgba(16,185,129,0.06)",
+                            borderColor: "rgba(52,211,153,0.55)",
+                            backgroundColor: "rgba(52,211,153,0.08)",
                             fill: "+1",
                             borderDash: [4, 4],
                             tension: 0.35,
@@ -643,8 +643,8 @@ const IMBS = (() => {
                         {
                             label: "Lower CI",
                             data: lowerCI,
-                            borderColor: "rgba(239,68,68,0.4)",
-                            backgroundColor: "rgba(239,68,68,0.06)",
+                            borderColor: "rgba(248,113,113,0.48)",
+                            backgroundColor: "rgba(248,113,113,0.08)",
                             fill: false,
                             borderDash: [4, 4],
                             tension: 0.35,
@@ -670,17 +670,17 @@ const IMBS = (() => {
                 plugins: {
                     legend: {
                         labels: {
-                            color: isDark ? "#94a3c0" : "#6b7280",
-                            font: { size: 11, family: "'Inter', sans-serif" },
+                            color: isDark ? "#a8bfd9" : "#465d79",
+                            font: { size: 11, family: "'Manrope', sans-serif" },
                             pointStyle: "circle",
                             usePointStyle: true,
                         },
                     },
                     tooltip: {
-                        backgroundColor: isDark ? "#1a2035" : "#ffffff",
-                        titleColor: isDark ? "#e8ecf5" : "#111827",
-                        bodyColor: isDark ? "#94a3c0" : "#4b5563",
-                        borderColor: isDark ? "#2a3555" : "#e5e7eb",
+                        backgroundColor: isDark ? "#15263d" : "#ffffff",
+                        titleColor: isDark ? "#e8f1ff" : "#111827",
+                        bodyColor: isDark ? "#a8bfd9" : "#4b5563",
+                        borderColor: isDark ? "#294768" : "#d5dfeb",
                         borderWidth: 1,
                         padding: 12,
                         cornerRadius: 8,
@@ -691,13 +691,13 @@ const IMBS = (() => {
                 },
                 scales: {
                     x: {
-                        grid: { color: isDark ? "rgba(42,53,85,0.3)" : "rgba(0,0,0,0.05)" },
-                        ticks: { color: isDark ? "#6b7a99" : "#9ca3af", font: { size: 11 } },
+                        grid: { color: isDark ? "rgba(120,146,176,0.2)" : "rgba(70,93,121,0.1)" },
+                        ticks: { color: isDark ? "#8ea5c1" : "#7188a4", font: { size: 11 } },
                     },
                     y: {
-                        grid: { color: isDark ? "rgba(42,53,85,0.3)" : "rgba(0,0,0,0.05)" },
+                        grid: { color: isDark ? "rgba(120,146,176,0.2)" : "rgba(70,93,121,0.1)" },
                         ticks: {
-                            color: isDark ? "#6b7a99" : "#9ca3af",
+                            color: isDark ? "#8ea5c1" : "#7188a4",
                             font: { size: 11 },
                             callback: (v) => "₹" + (v / 1000).toFixed(0) + "K",
                         },
@@ -762,8 +762,8 @@ const IMBS = (() => {
                 data: {
                     labels,
                     datasets: [
-                        { label: "Revenue (M)", data: revenue, borderColor: "#3b82f6", backgroundColor: "rgba(59,130,246,0.1)", fill: true, tension: 0.4, yAxisID: "y", borderWidth: 2 },
-                        { label: "Net Margin (%)", data: margin, borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.1)", fill: true, tension: 0.4, yAxisID: "y1", borderWidth: 2 },
+                        { label: "Revenue (M)", data: revenue, borderColor: "#22d3ee", backgroundColor: "rgba(34,211,238,0.12)", fill: true, tension: 0.4, yAxisID: "y", borderWidth: 2 },
+                        { label: "Net Margin (%)", data: margin, borderColor: "#34d399", backgroundColor: "rgba(52,211,153,0.12)", fill: true, tension: 0.4, yAxisID: "y1", borderWidth: 2 },
                     ],
                 },
                 options: {
@@ -771,11 +771,11 @@ const IMBS = (() => {
                     maintainAspectRatio: false,
                     animation: { duration: state.prefersReducedMotion ? 0 : 800 },
                     interaction: { mode: "index", intersect: false },
-                    plugins: { legend: { labels: { color: isDark ? "#94a3c0" : "#6b7280", font: { size: 11 } } } },
+                    plugins: { legend: { labels: { color: isDark ? "#a8bfd9" : "#465d79", font: { size: 11, family: "'Manrope', sans-serif" } } } },
                     scales: {
-                        x: { ticks: { color: isDark ? "#6b7a99" : "#9ca3af" }, grid: { display: false } },
-                        y: { type: "linear", position: "left", ticks: { color: "#3b82f6", callback: v => v.toFixed(1) + "M" }, grid: { color: isDark ? "rgba(42,53,85,0.2)" : "rgba(0,0,0,0.04)" } },
-                        y1: { type: "linear", position: "right", ticks: { color: "#10b981", callback: v => v + "%" }, grid: { display: false } },
+                        x: { ticks: { color: isDark ? "#8ea5c1" : "#7188a4" }, grid: { display: false } },
+                        y: { type: "linear", position: "left", ticks: { color: "#22d3ee", callback: v => v.toFixed(1) + "M" }, grid: { color: isDark ? "rgba(120,146,176,0.18)" : "rgba(70,93,121,0.08)" } },
+                        y1: { type: "linear", position: "right", ticks: { color: "#34d399", callback: v => v + "%" }, grid: { display: false } },
                     },
                 },
             });
@@ -846,8 +846,8 @@ const IMBS = (() => {
             if (!grid) return;
 
             grid.innerHTML = data.data.map((insight, idx) => {
-                const typeIcons = { anomaly: "🔴", trend: "📊", prediction: "🔮", recommendation: "💡" };
-                const icon = typeIcons[insight.type] || "📋";
+                const typeIcons = { anomaly: "AN", trend: "TR", prediction: "PD", recommendation: "RC" };
+                const icon = typeIcons[insight.type] || "IN";
                 const confPct = Math.round((insight.confidence || 0) * 100);
                 const confClass = confPct >= 85 ? "high" : confPct >= 70 ? "medium" : "low";
 
@@ -886,7 +886,7 @@ const IMBS = (() => {
                 const sevColor = a.severity === "high" ? "danger" : a.severity === "medium" ? "warning" : "success";
                 return `
                     <div class="insight-card">
-                        <div class="insight-card__icon insight-card__icon--anomaly">🔴</div>
+                        <div class="insight-card__icon insight-card__icon--anomaly">AN</div>
                         <div class="insight-card__content">
                             <div class="insight-card__title">${escHtml(a.metric)} — Deviation: ${a.deviation_pct}%</div>
                             <div class="insight-card__desc">Current: ${a.current_value} | Expected: ${a.expected_range.join("–")} | Status: ${a.status}</div>
@@ -930,7 +930,7 @@ const IMBS = (() => {
                 el.textContent = JSON.stringify(data, null, 2);
                 el.className = `result-box ${data.requires_review ? "danger" : "success"}`;
                 events.log("fraud", `${data.voucher_no}: score=${data.fraud_score}, review=${data.requires_review}`);
-                toast.show("Fraud Detection", data.requires_review ? "⚠️ Fraud review required!" : "✅ Transaction appears clean", data.requires_review ? "error" : "success");
+                toast.show("Fraud Detection", data.requires_review ? "Fraud review required." : "Transaction appears clean.", data.requires_review ? "error" : "success");
             }
         },
 
@@ -1246,7 +1246,7 @@ const IMBS = (() => {
                 sidebar.classList.toggle("collapsed");
                 state.sidebarCollapsed = sidebar.classList.contains("collapsed");
                 const label = $("sidebarToggleLabel");
-                if (label) label.textContent = state.sidebarCollapsed ? "▷" : "◁ Collapse";
+                if (label) label.textContent = state.sidebarCollapsed ? "Expand" : "Collapse";
             }
         },
     };
@@ -1260,7 +1260,10 @@ const IMBS = (() => {
             document.documentElement.setAttribute("data-theme", state.theme);
             document.body.setAttribute("data-theme", state.theme);
             localStorage.setItem("imbs_theme", state.theme);
-            $("themeBtn").textContent = state.theme === "dark" ? "🌙" : "☀️";
+            const themeLabel = state.theme === "dark" ? "Dark" : "Light";
+            $("themeBtn").textContent = themeLabel;
+            $("themeBtn").title = `Theme: ${themeLabel}`;
+            $("themeBtn").setAttribute("aria-label", `Theme: ${themeLabel}`);
 
             // Rebuild charts with new theme colors
             if (state.forecastChart) forecast.load();
@@ -1272,7 +1275,12 @@ const IMBS = (() => {
             document.documentElement.setAttribute("data-theme", state.theme);
             document.body.setAttribute("data-theme", state.theme);
             const btn = $("themeBtn");
-            if (btn) btn.textContent = state.theme === "dark" ? "🌙" : "☀️";
+            if (btn) {
+                const themeLabel = state.theme === "dark" ? "Dark" : "Light";
+                btn.textContent = themeLabel;
+                btn.title = `Theme: ${themeLabel}`;
+                btn.setAttribute("aria-label", `Theme: ${themeLabel}`);
+            }
         },
     };
 

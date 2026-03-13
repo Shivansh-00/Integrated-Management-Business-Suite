@@ -1,4 +1,6 @@
 import frappe
+import httpx
+
 from imbs_core.services.anomaly import enqueue_invoice_anomaly_check
 
 
@@ -9,3 +11,20 @@ def on_sales_invoice_submit(doc, method=None):
         message={"doctype": doc.doctype, "name": doc.name, "event": "submitted"},
         user="Administrator",
     )
+
+
+def post_webhook(url: str, body: str, headers: dict | None = None):
+    headers = headers or {}
+    timeout = float(frappe.conf.get("imbs_webhook_timeout_seconds", 8.0))
+
+    with httpx.Client(timeout=timeout) as client:
+        response = client.post(url, content=body.encode(), headers=headers)
+
+    frappe.logger("imbs_integrations").info(
+        {
+            "event": "webhook_delivery",
+            "url": url,
+            "status_code": response.status_code,
+        }
+    )
+    return {"status_code": response.status_code, "text": response.text[:1000]}

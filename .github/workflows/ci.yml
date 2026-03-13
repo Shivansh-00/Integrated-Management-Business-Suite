@@ -10,5 +10,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Install dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
       - name: Compile Python
         run: python -m compileall apps/imbs_core/imbs_core
+      - name: Ruff lint
+        run: ruff check apps/imbs_core/imbs_core apps/imbs_core/tests
+      - name: Unit tests
+        run: pytest -q apps/imbs_core/tests
