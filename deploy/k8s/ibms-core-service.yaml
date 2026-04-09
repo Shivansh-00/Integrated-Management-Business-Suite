@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ibms-core
+spec:
+  type: ClusterIP
+  selector:
+    app: ibms-core
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8000

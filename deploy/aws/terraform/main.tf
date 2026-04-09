@@ -66,7 +66,7 @@ resource "aws_db_instance" "mariadb" {
   engine                  = "mariadb"
   engine_version          = "10.6"
   instance_class          = "db.t3.medium"
-  db_name                 = "imbs"
+  db_name                 = "ibms"
   username                = var.db_username
   password                = var.db_password
   db_subnet_group_name    = aws_db_subnet_group.mariadb.name
@@ -85,7 +85,7 @@ resource "aws_elasticache_subnet_group" "redis" {
 
 resource "aws_elasticache_replication_group" "redis" {
   replication_group_id         = "${replace(local.prefix, "-", "")}-redis"
-  description                  = "IMBS Redis"
+  description                  = "IBMS Redis"
   engine                       = "redis"
   node_type                    = "cache.t3.medium"
   num_cache_clusters           = 2

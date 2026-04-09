@@ -15,8 +15,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
       - name: Compile Python
-        run: python -m compileall apps/imbs_core/imbs_core
+        run: python -m compileall apps/ibms_core/ibms_core
       - name: Ruff lint
-        run: ruff check apps/imbs_core/imbs_core apps/imbs_core/tests
+        run: ruff check apps/ibms_core/ibms_core apps/ibms_core/tests
       - name: Unit tests
-        run: pytest -q apps/imbs_core/tests
+        run: pytest -q apps/ibms_core/tests

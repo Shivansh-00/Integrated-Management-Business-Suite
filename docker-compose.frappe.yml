@@ -47,7 +47,7 @@ services:
       bench set-config -g redis_socketio redis://redis-socketio:6379;
       bench set-config -g socketio_port 9000;
       bench new-site ${SITE_NAME} --admin-password ${ADMIN_PASSWORD} --mariadb-root-password ${MYSQL_ROOT_PASSWORD};
-      bench --site ${SITE_NAME} install-app imbs_core;
+      bench --site ${SITE_NAME} install-app ibms_core;
     environment:
       <<: *common-env
       SITE_NAME: ${SITE_NAME}
@@ -71,7 +71,7 @@ services:
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
-      - ./apps/imbs_core:/home/frappe/frappe-bench/apps/imbs_core
+      - ./apps/ibms_core:/home/frappe/frappe-bench/apps/ibms_core
     depends_on:
       - configurator
 

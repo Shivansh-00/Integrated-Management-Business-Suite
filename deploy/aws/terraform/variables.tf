@@ -1,7 +1,7 @@
 variable "project_name" {
   type        = string
   description = "Project name prefix"
-  default     = "imbs"
+  default     = "ibms"
 }
 
 variable "environment" {
@@ -25,7 +25,7 @@ variable "vpc_cidr" {
 variable "db_username" {
   type        = string
   description = "RDS admin username"
-  default     = "imbsadmin"
+  default     = "ibmsadmin"
 }
 
 variable "db_password" {

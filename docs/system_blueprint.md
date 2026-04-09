@@ -7,7 +7,7 @@
    - Frappe Desk + custom Vue/React micro-frontends for AI widgets.
    - Realtime via WebSocket (`frappe.publish_realtime`) for KPI cards/alerts.
 2. **Domain Layer (Frappe apps)**
-   - `imbs_core`, `imbs_accounting_ai`, `imbs_inventory_ai`, `imbs_hr_ai`, `imbs_crm_ai`, `imbs_procurement_ai`, `imbs_assets_ai`.
+   - `ibms_core`, `ibms_accounting_ai`, `ibms_inventory_ai`, `ibms_hr_ai`, `ibms_crm_ai`, `ibms_procurement_ai`, `ibms_assets_ai`.
 3. **AI/Intelligence Layer**
    - Model inference services (fraud, forecasting, lead scoring, anomaly detection).
    - RAG assistant backed by vector DB.
@@ -114,8 +114,8 @@ Resilience:
 ## 7) REST + GraphQL API Design
 
 ### REST examples
-- `POST /api/method/imbs_core.api.forecast.get_sales_forecast`
-- `POST /api/method/imbs_core.api.risk.score_transaction`
+- `POST /api/method/ibms_core.api.forecast.get_sales_forecast`
+- `POST /api/method/ibms_core.api.risk.score_transaction`
 - `GET /api/resource/AI Alert?fields=["name","severity","status"]`
 
 ### GraphQL
@@ -179,8 +179,8 @@ Resilience:
 
 ```text
 apps/
-  imbs_core/
-    imbs_core/
+  ibms_core/
+    ibms_core/
       api/
         forecast.py
         risk.py
@@ -197,4 +197,4 @@ apps/
       hooks.py
 ```
 
-See implementation samples in the `apps/imbs_core` folder in this repository.
+See implementation samples in the `apps/ibms_core` folder in this repository.

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Bootstrap a local Frappe Bench in WSL2 for IMBS.
+# Bootstrap a local Frappe Bench in WSL2 for IBMS.
 # Usage:
-#   SITE_NAME=imbs.localhost ADMIN_PASSWORD=admin MYSQL_ROOT_PASSWORD=admin ./scripts/bootstrap-frappe-wsl.sh
+#   SITE_NAME=ibms.localhost ADMIN_PASSWORD=admin MYSQL_ROOT_PASSWORD=admin ./scripts/bootstrap-frappe-wsl.sh
 
-: "${SITE_NAME:=imbs.localhost}"
+: "${SITE_NAME:=ibms.localhost}"
 : "${ADMIN_PASSWORD:=admin}"
 : "${MYSQL_ROOT_PASSWORD:=admin}"
 : "${BENCH_DIR:=$HOME/frappe-bench}"
@@ -23,16 +23,16 @@ fi
 
 cd "$BENCH_DIR"
 
-if [[ ! -d "apps/imbs_core" ]]; then
-  ln -s "$APPS_SRC/imbs_core" "$BENCH_DIR/apps/imbs_core"
+if [[ ! -d "apps/ibms_core" ]]; then
+  ln -s "$APPS_SRC/ibms_core" "$BENCH_DIR/apps/ibms_core"
 fi
 
 if ! bench --site "$SITE_NAME" list-apps >/dev/null 2>&1; then
   bench new-site "$SITE_NAME" --admin-password "$ADMIN_PASSWORD" --mariadb-root-password "$MYSQL_ROOT_PASSWORD"
 fi
 
-bench --site "$SITE_NAME" install-app imbs_core || true
-bench --site "$SITE_NAME" set-config imbs_jwt_secret "replace-in-prod-$(date +%s)"
+bench --site "$SITE_NAME" install-app ibms_core || true
+bench --site "$SITE_NAME" set-config ibms_jwt_secret "replace-in-prod-$(date +%s)"
 bench use "$SITE_NAME"
 
 echo "Bootstrap completed."

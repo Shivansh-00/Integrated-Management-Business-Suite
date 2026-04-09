@@ -5,7 +5,7 @@ Enterprise-grade blueprint and starter implementation for an AI-first ERP platfo
 ## Included in this repository
 
 - Advanced system blueprint: architecture, RBAC, AI modules, queues, APIs, event-driven topology.
-- Frappe custom app scaffold (`imbs_core`) with services, jobs, security, API endpoints, and monitoring hooks.
+- Frappe custom app scaffold (`ibms_core`) with services, jobs, security, API endpoints, and monitoring hooks.
 - Enterprise deployment templates: Docker, Compose, NGINX, Kubernetes manifest, CI workflow.
 - UI assets for realtime KPI updates, AI insights panel, and dark mode.
 - Security and deployment documentation.
@@ -21,7 +21,7 @@ Enterprise-grade blueprint and starter implementation for an AI-first ERP platfo
 
 ## Enterprise Frappe Stack (New)
 
-This repository now includes a production-style Frappe app implementation under `apps/imbs_core` with:
+This repository now includes a production-style Frappe app implementation under `apps/ibms_core` with:
 
 - Enterprise doctypes and validations
 - JWT + RBAC API security hooks
@@ -49,7 +49,7 @@ docker compose -f docker-compose.frappe.yml up -d
 ```bash
 pip install -r requirements-dev.txt
 pre-commit run --all-files
-pytest -q apps/imbs_core/tests
+pytest -q apps/ibms_core/tests
 ```
 
 ### AWS Infrastructure

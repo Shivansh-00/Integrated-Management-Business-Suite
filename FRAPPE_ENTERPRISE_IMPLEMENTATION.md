@@ -1,8 +1,8 @@
-# IMBS Frappe Enterprise Implementation
+# IBMS Frappe Enterprise Implementation
 
 ## 1. Enterprise Architecture
 
-- Framework: Frappe custom app (`imbs_core`) with modular APIs, jobs, services, events, and UI assets.
+- Framework: Frappe custom app (`ibms_core`) with modular APIs, jobs, services, events, and UI assets.
 - Data: MariaDB (transactional data) + Redis (cache, queue, socketio).
 - API: Whitelisted REST endpoints and lightweight GraphQL endpoint.
 - Auth: Session auth + JWT (`Authorization: Bearer`) + RBAC + row-level permissions.
@@ -12,16 +12,16 @@
 ## 2. Delivered Modules
 
 ### Core Security
-- `apps/imbs_core/imbs_core/security/jwt_auth.py`: HS256 JWT issue/verify with iat/nbf/exp/jti.
-- `apps/imbs_core/imbs_core/security/auth_hooks.py`: Request auth hook to bind bearer token to Frappe user.
-- `apps/imbs_core/imbs_core/security/policies.py`: Row-level security for AI alerts and enterprise profiles.
+- `apps/ibms_core/ibms_core/security/jwt_auth.py`: HS256 JWT issue/verify with iat/nbf/exp/jti.
+- `apps/ibms_core/ibms_core/security/auth_hooks.py`: Request auth hook to bind bearer token to Frappe user.
+- `apps/ibms_core/ibms_core/security/policies.py`: Row-level security for AI alerts and enterprise profiles.
 
 ### APIs
-- `apps/imbs_core/imbs_core/api/auth.py`: registration, login, refresh, profile endpoint.
-- `apps/imbs_core/imbs_core/api/rest.py`: CRUD + bulk import/export for approved doctypes.
-- `apps/imbs_core/imbs_core/api/graphql_api.py`: GraphQL schema and query gateway.
-- `apps/imbs_core/imbs_core/api/integrations.py`: inbound webhook ingestion and outbound webhook dispatch.
-- `apps/imbs_core/imbs_core/api/ai_assistant.py`: chatbot and recommendation APIs.
+- `apps/ibms_core/ibms_core/api/auth.py`: registration, login, refresh, profile endpoint.
+- `apps/ibms_core/ibms_core/api/rest.py`: CRUD + bulk import/export for approved doctypes.
+- `apps/ibms_core/ibms_core/api/graphql_api.py`: GraphQL schema and query gateway.
+- `apps/ibms_core/ibms_core/api/integrations.py`: inbound webhook ingestion and outbound webhook dispatch.
+- `apps/ibms_core/ibms_core/api/ai_assistant.py`: chatbot and recommendation APIs.
 
 ### Data Model (Doctypes)
 - `Enterprise Profile`: user personalization and profile controls.
@@ -30,20 +30,20 @@
 - `Integration Webhook Log`: signed webhook audit and replay support.
 
 ### Automation & Eventing
-- `apps/imbs_core/imbs_core/jobs/kpi_rollup.py`: periodic KPI aggregation.
-- `apps/imbs_core/imbs_core/jobs/process_webhook_queue.py`: queue-driven webhook processing.
-- `apps/imbs_core/imbs_core/jobs/auto_workflow_optimizer.py`: generates optimization recommendations.
-- `apps/imbs_core/imbs_core/jobs/compliance_check.py`: nightly compliance signal generation.
-- `apps/imbs_core/imbs_core/events/stream_processor.py`: log processing and status updates.
+- `apps/ibms_core/ibms_core/jobs/kpi_rollup.py`: periodic KPI aggregation.
+- `apps/ibms_core/ibms_core/jobs/process_webhook_queue.py`: queue-driven webhook processing.
+- `apps/ibms_core/ibms_core/jobs/auto_workflow_optimizer.py`: generates optimization recommendations.
+- `apps/ibms_core/ibms_core/jobs/compliance_check.py`: nightly compliance signal generation.
+- `apps/ibms_core/ibms_core/events/stream_processor.py`: log processing and status updates.
 
 ### UI/UX
-- `apps/imbs_core/imbs_core/public/css/enterprise_theme.css`: modern glassmorphism skin.
-- `apps/imbs_core/imbs_core/public/js/enterprise_dashboard.js`: animated dashboard enhancements.
-- `apps/imbs_core/imbs_core/public/js/enterprise_profile.js`: Enterprise Profile UX.
-- `apps/imbs_core/imbs_core/public/js/kpi_snapshot.js`: KPI validation helper.
+- `apps/ibms_core/ibms_core/public/css/enterprise_theme.css`: modern glassmorphism skin.
+- `apps/ibms_core/ibms_core/public/js/enterprise_dashboard.js`: animated dashboard enhancements.
+- `apps/ibms_core/ibms_core/public/js/enterprise_profile.js`: Enterprise Profile UX.
+- `apps/ibms_core/ibms_core/public/js/kpi_snapshot.js`: KPI validation helper.
 
 ### Workflows
-- `apps/imbs_core/imbs_core/workflow/ai_recommendation_lifecycle/ai_recommendation_lifecycle.json`
+- `apps/ibms_core/ibms_core/workflow/ai_recommendation_lifecycle/ai_recommendation_lifecycle.json`
 
 ### DevOps
 - `docker-compose.frappe.yml`: Frappe + MariaDB + Redis deployment topology.
@@ -54,7 +54,7 @@
 - `scripts/bootstrap-frappe-windows.ps1`: Windows wrapper for WSL bootstrap.
 - `scripts/validate-frappe-apis.sh`: API smoke tests.
 - `requirements-dev.txt`, `pyproject.toml`, `.pre-commit-config.yaml`: quality and test toolchain.
-- `apps/imbs_core/tests/*`: unit tests for security and AI services.
+- `apps/ibms_core/tests/*`: unit tests for security and AI services.
 
 ## 3. Installation (Frappe Stack)
 
@@ -67,7 +67,7 @@ cp .env.example .env
 2. Set required vars in `.env`:
 
 ```env
-SITE_NAME=imbs.localhost
+SITE_NAME=ibms.localhost
 MYSQL_ROOT_PASSWORD=change-me
 ADMIN_PASSWORD=change-me
 ```
@@ -105,7 +105,7 @@ wsl -d Ubuntu bash -lc "cd ~/frappe-bench && bench start"
 ### JWT Login
 
 ```bash
-curl -X POST "http://localhost:8000/api/method/imbs_core.api.auth.login_with_jwt" \
+curl -X POST "http://localhost:8000/api/method/ibms_core.api.auth.login_with_jwt" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=administrator@example.com" \
   -d "password=admin"
@@ -114,13 +114,13 @@ curl -X POST "http://localhost:8000/api/method/imbs_core.api.auth.login_with_jwt
 ### REST List
 
 ```bash
-curl "http://localhost:8000/api/method/imbs_core.api.rest.list_resources?doctype=KPI%20Snapshot"
+curl "http://localhost:8000/api/method/ibms_core.api.rest.list_resources?doctype=KPI%20Snapshot"
 ```
 
 ### GraphQL Query
 
 ```bash
-curl -X POST "http://localhost:8000/api/method/imbs_core.api.graphql_api.execute" \
+curl -X POST "http://localhost:8000/api/method/ibms_core.api.graphql_api.execute" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "query=query KPI($company:String!){kpiSnapshots(company:$company){name metric_code metric_value}}" \
   -d 'variables={"company":"Default Company"}'
@@ -130,7 +130,7 @@ curl -X POST "http://localhost:8000/api/method/imbs_core.api.graphql_api.execute
 
 - Use managed MariaDB/Redis and persistent storage.
 - Configure TLS ingress and WAF.
-- Set strong `imbs_jwt_secret` in `site_config.json`.
+- Set strong `ibms_jwt_secret` in `site_config.json`.
 - Enable audit logs and external log shipping.
 - Run migrations/patches per release.
 - Scale worker queues (`short`, `default`, `long`) based on backlog metrics.
@@ -142,7 +142,7 @@ Run locally:
 ```bash
 pip install -r requirements-dev.txt
 pre-commit run --all-files
-pytest -q apps/imbs_core/tests
+pytest -q apps/ibms_core/tests
 ```
 
 ## 7. AWS Provisioning

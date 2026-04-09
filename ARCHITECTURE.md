@@ -1,6 +1,6 @@
-# IMBS Architecture
+# IBMS Architecture
 
-IMBS uses a modular Frappe custom-app architecture with domain services, API endpoints, async workers, and event-driven integrations.
+IBMS uses a modular Frappe custom-app architecture with domain services, API endpoints, async workers, and event-driven integrations.
 
 ## Key principles
 - Modular bounded contexts.

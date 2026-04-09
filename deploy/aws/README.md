@@ -1,6 +1,6 @@
 # AWS Deployment (Terraform)
 
-This directory provisions AWS managed infrastructure for IMBS:
+This directory provisions AWS managed infrastructure for IBMS:
 
 - VPC and private subnets
 - RDS MariaDB (Multi-AZ)
@@ -13,7 +13,7 @@ This directory provisions AWS managed infrastructure for IMBS:
 
 ```hcl
 aws_region  = "us-east-1"
-project_name = "imbs"
+project_name = "ibms"
 environment = "prod"
 db_password = "replace-with-strong-secret"
 ```

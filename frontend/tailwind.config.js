@@ -3,7 +3,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        imbs: {
+        ibms: {
           midnight: "#0c1220",
           ocean: "#13203b",
           mint: "#00c4a7",

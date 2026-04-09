@@ -5,7 +5,7 @@
 2. Start services via `docker compose up --build`.
 
 ## Kubernetes
-- Apply `apps/imbs_core/imbs_core/k8s/deployment.yaml`.
+- Apply `apps/ibms_core/ibms_core/k8s/deployment.yaml`.
 - Scale deployment replicas based on queue depth and API RPS.
 
 ## CI

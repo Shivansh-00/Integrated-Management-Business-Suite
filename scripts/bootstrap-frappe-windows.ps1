@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 
 $wslScript = @"
 set -euo pipefail
-export SITE_NAME=imbs.localhost
+export SITE_NAME=ibms.localhost
 export ADMIN_PASSWORD=admin
 export MYSQL_ROOT_PASSWORD=admin
 export APPS_SRC=/mnt/c/Users/shiva/Downloads/Integrated-Management-Business-Suite/apps

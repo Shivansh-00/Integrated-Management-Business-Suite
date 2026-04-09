@@ -1,9 +1,9 @@
 [tool.pytest.ini_options]
 pythonpath = [
-  "apps/imbs_core"
+  "apps/ibms_core"
 ]
 testpaths = [
-  "apps/imbs_core/tests"
+  "apps/ibms_core/tests"
 ]
 
 [tool.ruff]

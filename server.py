@@ -1,5 +1,5 @@
 """
-IMBS Core — Enterprise FastAPI Server v2.0
+IBMS Core — Enterprise FastAPI Server v2.0
 ============================================
 Production-grade backend with:
 
@@ -53,21 +53,21 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
-# Ensure the imbs_core package is importable
+# Ensure the ibms_core package is importable
 # ---------------------------------------------------------------------------
 _BASE_DIR = Path(__file__).resolve().parent
-_APP_DIR = _BASE_DIR / "apps" / "imbs_core"
+_APP_DIR = _BASE_DIR / "apps" / "ibms_core"
 if str(_APP_DIR) not in sys.path:
     sys.path.insert(0, str(_APP_DIR))
 
 # ---------------------------------------------------------------------------
-# IMBS module imports
+# IBMS module imports
 # ---------------------------------------------------------------------------
-from imbs_core.auto_budget_optimizer import optimize_budget
-from imbs_core.compliance_engine import evaluate_control_set
-from imbs_core.digital_twin import simulate_operational_twin
-from imbs_core.risk_scoring_engine import composite_risk_score
-from imbs_core.security.auth_engine import (
+from ibms_core.auto_budget_optimizer import optimize_budget
+from ibms_core.compliance_engine import evaluate_control_set
+from ibms_core.digital_twin import simulate_operational_twin
+from ibms_core.risk_scoring_engine import composite_risk_score
+from ibms_core.security.auth_engine import (
     authenticate,
     register_user,
     get_user_profile,
@@ -91,12 +91,12 @@ from imbs_core.security.auth_engine import (
     check_password_strength,
     ROLE_HIERARCHY,
 )
-from imbs_core.security.oauth_provider import get_oauth_provider_config
-from imbs_core.services.dynamic_pricing import suggest_price
-from imbs_core.services.fraud_detection import detect_fraud, isolation_forest_score
-from imbs_core.services.decision_engine import evaluate_document
-from imbs_core.monitoring.metrics import inc_requests, snapshot
-from imbs_core.monitoring.tracing import start_trace
+from ibms_core.security.oauth_provider import get_oauth_provider_config
+from ibms_core.services.dynamic_pricing import suggest_price
+from ibms_core.services.fraud_detection import detect_fraud, isolation_forest_score
+from ibms_core.services.decision_engine import evaluate_document
+from ibms_core.monitoring.metrics import inc_requests, snapshot
+from ibms_core.monitoring.tracing import start_trace
 
 load_dotenv()
 
@@ -107,12 +107,12 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
 )
-logger = logging.getLogger("imbs")
+logger = logging.getLogger("ibms")
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-JWT_SECRET = os.getenv("JWT_SECRET", "imbs-enterprise-secret-change-in-prod-2026")
+JWT_SECRET = os.getenv("JWT_SECRET", "ibms-enterprise-secret-change-in-prod-2026")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 ACCESS_TOKEN_TTL = 1800
 REFRESH_TOKEN_TTL = 604800
@@ -266,7 +266,7 @@ async def refresh_kpis(company: str = "Default Company"):
     _kpi_history.append({**kpi, "recorded_at": datetime.now(timezone.utc).isoformat()})
     if len(_kpi_history) > 1000:
         _kpi_history.pop(0)
-    await cache_set(f"imbs:kpi:{company}", json.dumps(kpi), ex=900)
+    await cache_set(f"ibms:kpi:{company}", json.dumps(kpi), ex=900)
     await ws_manager.broadcast({"type": "kpi_update", "payload": kpi})
     return kpi
 
@@ -301,7 +301,7 @@ async def _scheduler_loop():
 # ---------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("=== IMBS Enterprise Server v2.0 starting ===")
+    logger.info("=== IBMS Enterprise Server v2.0 starting ===")
     await get_redis()
     await refresh_kpis()
     task = asyncio.create_task(_scheduler_loop())
@@ -312,14 +312,14 @@ async def lifespan(app: FastAPI):
     r = await get_redis()
     if r:
         await r.aclose()
-    logger.info("=== IMBS Server stopped ===")
+    logger.info("=== IBMS Server stopped ===")
 
 
 # ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
 app = FastAPI(
-    title="IMBS — Integrated Management Business Suite",
+    title="IBMS — Integrated Business Management Suite",
     description="Enterprise AI-first ERP platform API v2.0",
     version="2.0.0",
     lifespan=lifespan,
@@ -349,7 +349,7 @@ async def serve_frontend():
     index = FRONTEND_DIR / "index.html"
     if index.exists():
         return HTMLResponse(content=index.read_text(encoding="utf-8"))
-    return HTMLResponse(content="<h1>IMBS API is running</h1><p><a href='/api/docs'>/api/docs</a></p>")
+    return HTMLResponse(content="<h1>IBMS API is running</h1><p><a href='/api/docs'>/api/docs</a></p>")
 
 
 # ---------------------------------------------------------------------------
@@ -405,7 +405,7 @@ async def get_current_user(request: Request) -> dict | None:
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
     if not token:
-        token = request.cookies.get("imbs_access_token")
+        token = request.cookies.get("ibms_access_token")
     if not token:
         return None
     payload = decode_jwt(token, JWT_SECRET)
@@ -554,8 +554,8 @@ async def login(req: LoginRequest, request: Request, response: Response):
         "user_id": result.user_id, "role": result.role, "permissions": result.permissions,
         "access_token": result.access_token, "csrf_token": result.csrf_token, "expires_in": ACCESS_TOKEN_TTL,
     })
-    resp.set_cookie(key="imbs_access_token", value=result.access_token, httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=ACCESS_TOKEN_TTL, path="/")
-    resp.set_cookie(key="imbs_refresh_token", value=result.refresh_token, httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=REFRESH_TOKEN_TTL, path="/api/auth/refresh")
+    resp.set_cookie(key="ibms_access_token", value=result.access_token, httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=ACCESS_TOKEN_TTL, path="/")
+    resp.set_cookie(key="ibms_refresh_token", value=result.refresh_token, httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=REFRESH_TOKEN_TTL, path="/api/auth/refresh")
     await push_notification("Login Successful", f"User {req.username} logged in", "info", result.user_id)
     return resp
 
@@ -570,7 +570,7 @@ async def register(req: RegisterRequest):
 
 @app.post("/api/auth/refresh")
 async def refresh_token(request: Request):
-    refresh = request.cookies.get("imbs_refresh_token")
+    refresh = request.cookies.get("ibms_refresh_token")
     if not refresh:
         return error_response("No refresh token", 401)
     device_fp = compute_device_fingerprint(
@@ -580,8 +580,8 @@ async def refresh_token(request: Request):
     result = rotate_refresh_token(refresh, device_fp)
     if not result:
         resp = error_response("Invalid or expired refresh token", 401)
-        resp.delete_cookie("imbs_access_token")
-        resp.delete_cookie("imbs_refresh_token", path="/api/auth/refresh")
+        resp.delete_cookie("ibms_access_token")
+        resp.delete_cookie("ibms_refresh_token", path="/api/auth/refresh")
         return resp
     user_id, new_refresh = result
     profile = get_user_profile(user_id)
@@ -593,8 +593,8 @@ async def refresh_token(request: Request):
     )
     csrf_token = generate_csrf_token(user_id)
     resp = api_response({"access_token": access_token, "csrf_token": csrf_token, "expires_in": ACCESS_TOKEN_TTL})
-    resp.set_cookie(key="imbs_access_token", value=access_token, httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=ACCESS_TOKEN_TTL, path="/")
-    resp.set_cookie(key="imbs_refresh_token", value=new_refresh, httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=REFRESH_TOKEN_TTL, path="/api/auth/refresh")
+    resp.set_cookie(key="ibms_access_token", value=access_token, httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=ACCESS_TOKEN_TTL, path="/")
+    resp.set_cookie(key="ibms_refresh_token", value=new_refresh, httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=REFRESH_TOKEN_TTL, path="/api/auth/refresh")
     return resp
 
 
@@ -605,8 +605,8 @@ async def logout(request: Request):
         revoke_all_tokens(user.get("sub", ""))
         audit_event("logout", user_id=user.get("sub", ""))
     resp = api_response(None, "Logged out successfully")
-    resp.delete_cookie("imbs_access_token")
-    resp.delete_cookie("imbs_refresh_token", path="/api/auth/refresh")
+    resp.delete_cookie("ibms_access_token")
+    resp.delete_cookie("ibms_refresh_token", path="/api/auth/refresh")
     return resp
 
 
@@ -713,7 +713,7 @@ async def get_notifications(limit: int = 50, user: dict = Depends(require_auth))
 # ===================================================================
 @app.get("/api/dashboard")
 async def dashboard_snapshot(company: str = "Default Company"):
-    cached = await cache_get(f"imbs:kpi:{company}")
+    cached = await cache_get(f"ibms:kpi:{company}")
     if cached:
         return {"company": company, "kpi": json.loads(cached)}
     kpi = _kpi_store.get(company) or await refresh_kpis(company)
@@ -852,14 +852,14 @@ async def oauth_config():
 
 @app.post("/api/auth/token")
 async def get_token_legacy(subject: str = "admin"):
-    from imbs_core.security.jwt_auth import issue_token
+    from ibms_core.security.jwt_auth import issue_token
     token = issue_token(subject, JWT_SECRET, ttl_seconds=3600)
     return {"token": token, "expires_in": 3600}
 
 
 @app.post("/api/auth/validate")
 async def validate_legacy(token: str = ""):
-    from imbs_core.security.jwt_auth import validate_token
+    from ibms_core.security.jwt_auth import validate_token
     valid = validate_token(token, JWT_SECRET)
     return {"valid": valid}
 
@@ -911,5 +911,5 @@ if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
     reload_enabled = os.getenv("RELOAD", "true").lower() == "true"
-    logger.info("Starting IMBS Enterprise Server v2.0 on %s:%d", host, port)
+    logger.info("Starting IBMS Enterprise Server v2.0 on %s:%d", host, port)
     uvicorn.run("server:app", host=host, port=port, reload=reload_enabled, reload_dirs=[str(_BASE_DIR)], ws="websockets", log_level="info")

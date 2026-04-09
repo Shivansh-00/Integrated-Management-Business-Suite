@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ibms-core
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/proxy-body-size: "20m"
+spec:
+  rules:
+  - host: ibms.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ibms-core
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - ibms.example.com
+    secretName: ibms-core-tls

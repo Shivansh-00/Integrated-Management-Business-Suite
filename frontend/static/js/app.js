@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════
-   IMBS Enterprise Dashboard — Frontend Application Engine v2.0
+   IBMS Enterprise Dashboard — Frontend Application Engine v2.0
    ═══════════════════════════════════════════════════════════════════
    • Centralized API service layer with interceptors
    • JWT auth with automatic token refresh
@@ -19,7 +19,7 @@
 
 "use strict";
 
-const IMBS = (() => {
+const IBMS = (() => {
     // ─── Configuration ───────────────────────────────────────────
     const CONFIG = {
         API_BASE: window.location.origin,
@@ -45,7 +45,7 @@ const IMBS = (() => {
         wsReconnectTimer: null,
         activePage: "dashboard",
         sidebarCollapsed: false,
-        theme: localStorage.getItem("imbs_theme") || "dark",
+        theme: localStorage.getItem("ibms_theme") || "dark",
         forecastChart: null,
         analyticsChart: null,
         kpiHistoryChart: null,
@@ -167,7 +167,7 @@ const IMBS = (() => {
                     <div class="toast__title">${escHtml(title)}</div>
                     <div class="toast__message">${escHtml(message)}</div>
                 </div>
-                <button class="toast__close" onclick="IMBS.toast.dismiss('${id}')">✕</button>
+                <button class="toast__close" onclick="IBMS.toast.dismiss('${id}')">✕</button>
             `;
             container.appendChild(el);
 
@@ -390,7 +390,7 @@ const IMBS = (() => {
             const ctx = canvas.getContext("2d");
             ctx.textBaseline = "top";
             ctx.font = "14px Arial";
-            ctx.fillText("IMBS-FP", 2, 2);
+            ctx.fillText("IBMS-FP", 2, 2);
             const canvasData = canvas.toDataURL().slice(-32);
             const ua = navigator.userAgent;
             const lang = navigator.language;
@@ -1259,7 +1259,7 @@ const IMBS = (() => {
             state.theme = state.theme === "dark" ? "light" : "dark";
             document.documentElement.setAttribute("data-theme", state.theme);
             document.body.setAttribute("data-theme", state.theme);
-            localStorage.setItem("imbs_theme", state.theme);
+            localStorage.setItem("ibms_theme", state.theme);
             const themeLabel = state.theme === "dark" ? "Dark" : "Light";
             $("themeBtn").textContent = themeLabel;
             $("themeBtn").title = `Theme: ${themeLabel}`;

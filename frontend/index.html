@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="IMBS - AI-first Enterprise Resource Planning Platform">
+    <meta name="description" content="IBMS - AI-first Enterprise Resource Planning Platform">
     <meta name="theme-color" content="#f4f7fb">
-    <title>IMBS - Integrated Management Business Suite</title>
+    <title>IBMS - Integrated Business Management Suite</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>◆</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -24,7 +24,7 @@
                 <div class="auth-brand__logo-wrap">
                     <img
                         class="auth-brand__logo auth-brand__logo--image"
-                        src="/static/images/imbs-auth-logo.jpg"
+                        src="/static/images/ibms-auth-logo.jpg"
                         alt="Integrated Business Management Suite logo"
                     >
                 </div>
@@ -33,7 +33,7 @@
             </div>
 
             <!-- Login Form -->
-            <form class="auth-form" id="loginForm" onsubmit="return IMBS.auth.login(event)">
+            <form class="auth-form" id="loginForm" onsubmit="return IBMS.auth.login(event)">
                 <div class="form-group">
                     <label for="loginUsername">Username</label>
                     <input type="text" id="loginUsername" placeholder="Enter username" autocomplete="username" required>
@@ -49,12 +49,12 @@
                 <div class="auth-error" id="loginError"></div>
                 <button type="submit" class="btn btn--primary btn--block" id="loginBtn">Sign In</button>
                 <div class="auth-footer">
-                    Don't have an account? <a onclick="IMBS.auth.showRegister()">Create one</a>
+                    Don't have an account? <a onclick="IBMS.auth.showRegister()">Create one</a>
                 </div>
             </form>
 
             <!-- Register Form -->
-            <form class="auth-form" id="registerForm" style="display:none" onsubmit="return IMBS.auth.register(event)">
+            <form class="auth-form" id="registerForm" style="display:none" onsubmit="return IBMS.auth.register(event)">
                 <div class="form-group">
                     <label for="regUsername">Username</label>
                     <input type="text" id="regUsername" placeholder="Choose username" autocomplete="username" required>
@@ -71,7 +71,7 @@
                 <div class="auth-error" id="registerError"></div>
                 <button type="submit" class="btn btn--primary btn--block" id="regBtn">Create Account</button>
                 <div class="auth-footer">
-                    Already have an account? <a onclick="IMBS.auth.showLogin()">Sign in</a>
+                    Already have an account? <a onclick="IBMS.auth.showLogin()">Sign in</a>
                 </div>
             </form>
         </div>
@@ -88,74 +88,74 @@
         <div class="sidebar__brand">
             <div class="sidebar__logo">◆</div>
             <div class="sidebar__brand-text">
-                <span class="sidebar__brand-name">IMBS</span>
+                <span class="sidebar__brand-name">IBMS</span>
                 <span class="sidebar__brand-sub">Enterprise Suite</span>
             </div>
         </div>
 
         <nav class="sidebar__nav">
             <div class="sidebar__section-label">Main</div>
-            <a class="nav-item active" data-page="dashboard" onclick="IMBS.nav.goto('dashboard')">
+            <a class="nav-item active" data-page="dashboard" onclick="IBMS.nav.goto('dashboard')">
                 <span class="nav-item__icon">DB</span>
                 <span class="nav-item__label">Dashboard</span>
             </a>
-            <a class="nav-item" data-page="analytics" onclick="IMBS.nav.goto('analytics')">
+            <a class="nav-item" data-page="analytics" onclick="IBMS.nav.goto('analytics')">
                 <span class="nav-item__icon">AN</span>
                 <span class="nav-item__label">Analytics</span>
             </a>
-            <a class="nav-item" data-page="ai-insights" onclick="IMBS.nav.goto('ai-insights')">
+            <a class="nav-item" data-page="ai-insights" onclick="IBMS.nav.goto('ai-insights')">
                 <span class="nav-item__icon">AI</span>
                 <span class="nav-item__label">AI Insights</span>
                 <span class="nav-item__badge" id="insightsBadge" style="display:none">0</span>
             </a>
 
             <div class="sidebar__section-label">Operations</div>
-            <a class="nav-item" data-page="risk" onclick="IMBS.nav.goto('risk')">
+            <a class="nav-item" data-page="risk" onclick="IBMS.nav.goto('risk')">
                 <span class="nav-item__icon">RF</span>
                 <span class="nav-item__label">Risk & Fraud</span>
             </a>
-            <a class="nav-item" data-page="compliance" onclick="IMBS.nav.goto('compliance')">
+            <a class="nav-item" data-page="compliance" onclick="IBMS.nav.goto('compliance')">
                 <span class="nav-item__icon">CP</span>
                 <span class="nav-item__label">Compliance</span>
             </a>
-            <a class="nav-item" data-page="pricing" onclick="IMBS.nav.goto('pricing')">
+            <a class="nav-item" data-page="pricing" onclick="IBMS.nav.goto('pricing')">
                 <span class="nav-item__icon">PR</span>
                 <span class="nav-item__label">Dynamic Pricing</span>
             </a>
-            <a class="nav-item" data-page="budget" onclick="IMBS.nav.goto('budget')">
+            <a class="nav-item" data-page="budget" onclick="IBMS.nav.goto('budget')">
                 <span class="nav-item__icon">BG</span>
                 <span class="nav-item__label">Budget Optimizer</span>
             </a>
-            <a class="nav-item" data-page="leads" onclick="IMBS.nav.goto('leads')">
+            <a class="nav-item" data-page="leads" onclick="IBMS.nav.goto('leads')">
                 <span class="nav-item__icon">LD</span>
                 <span class="nav-item__label">Lead Scoring</span>
             </a>
 
             <div class="sidebar__section-label">System</div>
-            <a class="nav-item" data-page="events" onclick="IMBS.nav.goto('events')">
+            <a class="nav-item" data-page="events" onclick="IBMS.nav.goto('events')">
                 <span class="nav-item__icon">EV</span>
                 <span class="nav-item__label">Event Stream</span>
                 <span class="nav-item__badge" id="eventBadge" style="display:none">0</span>
             </a>
-            <a class="nav-item" data-page="system" onclick="IMBS.nav.goto('system')">
+            <a class="nav-item" data-page="system" onclick="IBMS.nav.goto('system')">
                 <span class="nav-item__icon">SY</span>
                 <span class="nav-item__label">System Health</span>
             </a>
-            <a class="nav-item" data-page="audit" onclick="IMBS.nav.goto('audit')">
+            <a class="nav-item" data-page="audit" onclick="IBMS.nav.goto('audit')">
                 <span class="nav-item__icon">AU</span>
                 <span class="nav-item__label">Audit Log</span>
             </a>
         </nav>
 
         <div class="sidebar__footer">
-            <div class="sidebar__user" onclick="IMBS.auth.showProfile()">
+            <div class="sidebar__user" onclick="IBMS.auth.showProfile()">
                 <div class="sidebar__avatar" id="userAvatar">A</div>
                 <div class="sidebar__user-info">
                     <div class="sidebar__user-name" id="userName">Admin</div>
                     <div class="sidebar__user-role" id="userRole">admin</div>
                 </div>
             </div>
-            <button class="sidebar__toggle" onclick="IMBS.nav.toggleSidebar()">
+            <button class="sidebar__toggle" onclick="IBMS.nav.toggleSidebar()">
                 <span id="sidebarToggleLabel">Collapse</span>
             </button>
         </div>
@@ -167,9 +167,9 @@
         <!-- TOPBAR -->
         <header class="topbar">
             <div class="topbar__left">
-                <button class="topbar__btn" onclick="IMBS.nav.toggleSidebar()" aria-label="Toggle sidebar" style="display:none" id="mobileMenuBtn">☰</button>
+                <button class="topbar__btn" onclick="IBMS.nav.toggleSidebar()" aria-label="Toggle sidebar" style="display:none" id="mobileMenuBtn">☰</button>
                 <div class="topbar__breadcrumb">
-                    <span>IMBS</span>
+                    <span>IBMS</span>
                     <span>›</span>
                     <span class="topbar__breadcrumb-current" id="breadcrumb">Dashboard</span>
                 </div>
@@ -179,14 +179,14 @@
                     <span class="status-dot"></span>
                     <span id="wsStatusText">Connecting</span>
                 </div>
-                <button class="topbar__btn" onclick="IMBS.kpi.refreshAll()" title="Refresh KPIs">Refresh</button>
-                <button class="notification-btn" onclick="IMBS.notifications.toggle()" title="Notifications" id="notifBtn">
+                <button class="topbar__btn" onclick="IBMS.kpi.refreshAll()" title="Refresh KPIs">Refresh</button>
+                <button class="notification-btn" onclick="IBMS.notifications.toggle()" title="Notifications" id="notifBtn">
                     <span class="notification-btn__glyph" aria-hidden="true"></span>
                     <span class="notification-badge" id="notifBadge" style="display:none">0</span>
                 </button>
-                <button class="theme-toggle" onclick="IMBS.theme.toggle()" title="Toggle theme" id="themeBtn">Dark</button>
+                <button class="theme-toggle" onclick="IBMS.theme.toggle()" title="Toggle theme" id="themeBtn">Dark</button>
                 <a class="topbar__btn" href="/api/docs" target="_blank">API Docs</a>
-                <button class="topbar__btn btn--danger" onclick="IMBS.auth.logout()" title="Sign out">Sign Out</button>
+                <button class="topbar__btn btn--danger" onclick="IBMS.auth.logout()" title="Sign out">Sign Out</button>
             </div>
         </header>
 
@@ -244,7 +244,7 @@
                 <section class="panel" id="forecastPanel">
                     <div class="panel__header">
                         <h2 class="panel__title">Sales Forecast</h2>
-                        <select id="forecastPeriods" class="select--sm" onchange="IMBS.forecast.load()">
+                        <select id="forecastPeriods" class="select--sm" onchange="IBMS.forecast.load()">
                             <option value="6">6 months</option>
                             <option value="12" selected>12 months</option>
                             <option value="24">24 months</option>
@@ -263,14 +263,14 @@
                     <div class="panel__body copilot">
                         <div class="copilot__messages" id="copilotMessages">
                             <div class="copilot__msg copilot__msg--bot">
-                                Welcome to IMBS AI Copilot. Ask me about KPIs, risks, forecasts, or compliance.
+                                Welcome to IBMS AI Copilot. Ask me about KPIs, risks, forecasts, or compliance.
                             </div>
                         </div>
                         <div class="copilot__input-row">
                             <input type="text" id="copilotInput" class="copilot__input input--sm"
                                    placeholder="Ask about your business data…"
-                                   onkeydown="if(event.key==='Enter')IMBS.copilot.ask()">
-                            <button class="btn btn--primary btn--sm" onclick="IMBS.copilot.ask()">Send</button>
+                                   onkeydown="if(event.key==='Enter')IBMS.copilot.ask()">
+                            <button class="btn btn--primary btn--sm" onclick="IBMS.copilot.ask()">Send</button>
                         </div>
                     </div>
                 </section>
@@ -289,7 +289,7 @@
                 <section class="panel panel--full">
                     <div class="panel__header">
                         <h2 class="panel__title">Extended Forecast</h2>
-                        <select id="analyticsperiods" class="select--sm" onchange="IMBS.forecast.loadAnalytics()">
+                        <select id="analyticsperiods" class="select--sm" onchange="IBMS.forecast.loadAnalytics()">
                             <option value="6">6 months</option>
                             <option value="12">12 months</option>
                             <option value="24" selected>24 months</option>
@@ -349,7 +349,7 @@
                 <section class="panel panel--full">
                     <div class="panel__header">
                         <h2 class="panel__title">AI Insights</h2>
-                        <button class="btn btn--sm" onclick="IMBS.ai.loadInsights()">Refresh</button>
+                        <button class="btn btn--sm" onclick="IBMS.ai.loadInsights()">Refresh</button>
                     </div>
                     <div class="panel__body">
                         <div class="insights-grid" id="insightsGrid">
@@ -364,7 +364,7 @@
                 <section class="panel">
                     <div class="panel__header">
                         <h2 class="panel__title">Anomaly Detection</h2>
-                        <button class="btn btn--sm" onclick="IMBS.ai.loadAnomalies()">Scan Now</button>
+                        <button class="btn btn--sm" onclick="IBMS.ai.loadAnomalies()">Scan Now</button>
                     </div>
                     <div class="panel__body">
                         <div id="anomalyResults">
@@ -381,8 +381,8 @@
                         <div class="copilot__input-row">
                             <input type="text" id="copilotInput2" class="copilot__input input--sm"
                                    placeholder="Analyze trends, risks, anomalies…"
-                                   onkeydown="if(event.key==='Enter')IMBS.copilot.ask('copilotInput2','copilotMessages2')">
-                            <button class="btn btn--primary btn--sm" onclick="IMBS.copilot.ask('copilotInput2','copilotMessages2')">Send</button>
+                                   onkeydown="if(event.key==='Enter')IBMS.copilot.ask('copilotInput2','copilotMessages2')">
+                            <button class="btn btn--primary btn--sm" onclick="IBMS.copilot.ask('copilotInput2','copilotMessages2')">Send</button>
                         </div>
                     </div>
                 </section>
@@ -417,7 +417,7 @@
                             <label>Amount (₹)</label>
                             <input type="number" id="riskAmount" value="250000" class="input--sm">
                         </div>
-                        <button class="btn btn--primary" onclick="IMBS.tools.scoreRisk()">Score Risk</button>
+                        <button class="btn btn--primary" onclick="IBMS.tools.scoreRisk()">Score Risk</button>
                         <div class="result-box" id="riskResult"></div>
                     </div>
                 </section>
@@ -437,7 +437,7 @@
                             <label>Velocity Index</label>
                             <input type="number" id="fraudVelocity" value="0.6" step="0.1" class="input--sm">
                         </div>
-                        <button class="btn btn--primary" onclick="IMBS.tools.detectFraud()">Detect Fraud</button>
+                        <button class="btn btn--primary" onclick="IBMS.tools.detectFraud()">Detect Fraud</button>
                         <div class="result-box" id="fraudResult"></div>
                     </div>
                 </section>
@@ -464,7 +464,7 @@
                             <label>Approval Reference</label>
                             <input type="text" id="compApproval" value="" placeholder="Leave empty to test violation" class="input--sm">
                         </div>
-                        <button class="btn btn--primary" onclick="IMBS.tools.checkCompliance()">Check Compliance</button>
+                        <button class="btn btn--primary" onclick="IBMS.tools.checkCompliance()">Check Compliance</button>
                         <div class="result-box" id="complianceResult"></div>
                     </div>
                 </section>
@@ -523,7 +523,7 @@
                             <label>Competitor Index (0–1)</label>
                             <input type="number" id="pricingComp" value="0.5" step="0.1" min="0" max="1" class="input--sm">
                         </div>
-                        <button class="btn btn--primary" onclick="IMBS.tools.suggestPrice()">Get Optimized Price</button>
+                        <button class="btn btn--primary" onclick="IBMS.tools.suggestPrice()">Get Optimized Price</button>
                         <div class="result-box" id="pricingResult"></div>
                     </div>
                 </section>
@@ -550,7 +550,7 @@
                             <label>Budget Lines (JSON)</label>
                             <textarea id="budgetLines" class="input--sm" rows="4">[{"dept":"Engineering","amount":500000},{"dept":"Marketing","amount":300000},{"dept":"Sales","amount":200000}]</textarea>
                         </div>
-                        <button class="btn btn--primary" onclick="IMBS.tools.optimizeBudget()">Optimize Budget</button>
+                        <button class="btn btn--primary" onclick="IBMS.tools.optimizeBudget()">Optimize Budget</button>
                         <div class="result-box" id="budgetResult"></div>
                     </div>
                 </section>
@@ -581,7 +581,7 @@
                             <label>Fit (0–1)</label>
                             <input type="number" id="leadFit" value="0.9" step="0.1" min="0" max="1" class="input--sm">
                         </div>
-                        <button class="btn btn--primary" onclick="IMBS.tools.scoreLead()">Score Lead</button>
+                        <button class="btn btn--primary" onclick="IBMS.tools.scoreLead()">Score Lead</button>
                         <div class="result-box" id="leadResult"></div>
                     </div>
                 </section>
@@ -623,7 +623,7 @@
                 <section class="panel panel--full">
                     <div class="panel__header">
                         <h2 class="panel__title">System Status</h2>
-                        <button class="btn btn--sm" onclick="IMBS.system.checkHealth()">Refresh</button>
+                        <button class="btn btn--sm" onclick="IBMS.system.checkHealth()">Refresh</button>
                     </div>
                     <div class="panel__body">
                         <div class="health-grid" id="healthGrid">
@@ -657,7 +657,7 @@
                 <section class="panel panel--full">
                     <div class="panel__header">
                         <h2 class="panel__title">Audit Entries</h2>
-                        <button class="btn btn--sm" onclick="IMBS.audit.load()">Refresh</button>
+                        <button class="btn btn--sm" onclick="IBMS.audit.load()">Refresh</button>
                     </div>
                     <div class="panel__body">
                         <div class="event-log" id="auditLog" style="max-height:500px">
@@ -670,7 +670,7 @@
 
         <!-- FOOTER -->
         <footer class="footer">
-            <span>IMBS v2.0.0 - AI-first Enterprise Resource Planning</span>
+            <span>IBMS v2.0.0 - AI-first Enterprise Resource Planning</span>
             <span id="footerUpdate">Ready</span>
         </footer>
     </div>

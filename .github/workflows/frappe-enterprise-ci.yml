@@ -27,13 +27,13 @@ jobs:
         run: pre-commit run --all-files
 
       - name: Lint app code
-        run: ruff check apps/imbs_core/imbs_core
+        run: ruff check apps/ibms_core/ibms_core
 
       - name: Type check selected modules
-        run: mypy apps/imbs_core/imbs_core/security apps/imbs_core/imbs_core/api
+        run: mypy apps/ibms_core/ibms_core/security apps/ibms_core/ibms_core/api
 
       - name: Unit tests
-        run: pytest -q apps/imbs_core/tests
+        run: pytest -q apps/ibms_core/tests
 
   build-image:
     runs-on: ubuntu-latest
@@ -46,4 +46,4 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build baseline image
-        run: docker build -t imbs-core-fastapi:ci .
+        run: docker build -t ibms-core-fastapi:ci .
