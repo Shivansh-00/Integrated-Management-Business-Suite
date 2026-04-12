@@ -97,6 +97,15 @@ from ibms_core.services.fraud_detection import detect_fraud, isolation_forest_sc
 from ibms_core.services.decision_engine import evaluate_document
 from ibms_core.monitoring.metrics import inc_requests, snapshot
 from ibms_core.monitoring.tracing import start_trace
+from ibms_core.database.connection import connect_db, close_db, get_db
+from ibms_core.database.models import (
+    KPIOps,
+    NotificationOps,
+    AIRecommendationOps,
+    AlertOps,
+    WebhookLogOps,
+    ProfileOps,
+)
 
 load_dotenv()
 
@@ -232,6 +241,13 @@ async def push_notification(title: str, message: str, level: str = "info", targe
     _notifications.append(notif)
     if len(_notifications) > 500:
         _notifications.pop(0)
+    # Persist to MongoDB
+    try:
+        await NotificationOps.create(
+            title=title, message=message, level=level, target_user=target_user,
+        )
+    except Exception as exc:
+        logger.warning("MongoDB notification save failed: %s", exc)
     payload = {"type": "notification", "payload": notif}
     if target_user:
         await ws_manager.send_personal(target_user, payload)
@@ -262,11 +278,17 @@ async def refresh_kpis(company: str = "Default Company"):
         "customer_satisfaction": round(92.1 + random.uniform(-0.8, 0.8), 1),
         "last_refresh": datetime.now(timezone.utc).isoformat(),
     }
+    # In-memory cache (fast access for WS + dashboard)
     _kpi_store[company] = kpi
     _kpi_history.append({**kpi, "recorded_at": datetime.now(timezone.utc).isoformat()})
     if len(_kpi_history) > 1000:
         _kpi_history.pop(0)
     await cache_set(f"ibms:kpi:{company}", json.dumps(kpi), ex=900)
+    # Persist to MongoDB
+    try:
+        await KPIOps.save_snapshot(kpi)
+    except Exception as exc:
+        logger.warning("MongoDB KPI save failed: %s", exc)
     await ws_manager.broadcast({"type": "kpi_update", "payload": kpi})
     return kpi
 
@@ -302,6 +324,12 @@ async def _scheduler_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("=== IBMS Enterprise Server v2.0 starting ===")
+    # Connect MongoDB
+    try:
+        await connect_db()
+        logger.info("MongoDB connected successfully")
+    except Exception as exc:
+        logger.error("MongoDB connection failed: %s — falling back to in-memory", exc)
     await get_redis()
     await refresh_kpis()
     task = asyncio.create_task(_scheduler_loop())
@@ -309,6 +337,8 @@ async def lifespan(app: FastAPI):
     global _scheduler_running
     _scheduler_running = False
     task.cancel()
+    # Close MongoDB
+    await close_db()
     r = await get_redis()
     if r:
         await r.aclose()
@@ -675,8 +705,17 @@ async def audit_log_endpoint(limit: int = 100, event_type: str = "", user: dict 
 async def health():
     r = await get_redis()
     uptime = round(time.time() - _server_start_time, 1)
+    # Check MongoDB
+    mongo_ok = False
+    try:
+        db = get_db()
+        await db.client.admin.command("ping")
+        mongo_ok = True
+    except Exception:
+        pass
     return {
         "status": "healthy", "version": "2.0.0", "redis": r is not None,
+        "mongodb": mongo_ok,
         "uptime_seconds": uptime, "uptime_human": f"{int(uptime // 3600)}h {int((uptime % 3600) // 60)}m",
         "total_requests": _request_count, "total_errors": _error_count,
         "error_rate": round((_error_count / max(_request_count, 1)) * 100, 2),
@@ -695,16 +734,31 @@ async def system_status():
     r = await get_redis()
     uptime = time.time() - _server_start_time
     top_endpoints = sorted(_endpoint_stats.items(), key=lambda x: x[1]["count"], reverse=True)[:10]
+    # Check MongoDB
+    mongo_ok = False
+    try:
+        db = get_db()
+        await db.client.admin.command("ping")
+        mongo_ok = True
+    except Exception:
+        pass
     return api_response({
         "server": {"status": "healthy", "version": "2.0.0", "uptime_seconds": round(uptime, 1), "uptime_human": f"{int(uptime // 3600)}h {int((uptime % 3600) // 60)}m {int(uptime % 60)}s"},
         "performance": {"total_requests": _request_count, "total_errors": _error_count, "error_rate_pct": round((_error_count / max(_request_count, 1)) * 100, 2), "ws_connections": len(ws_manager.active)},
-        "infrastructure": {"redis": {"connected": r is not None}, "cache": {"type": "redis" if r else "in-memory", "entries": len(_mem_cache)}},
+        "infrastructure": {"redis": {"connected": r is not None}, "mongodb": {"connected": mongo_ok}, "cache": {"type": "redis" if r else "in-memory", "entries": len(_mem_cache)}},
         "top_endpoints": [{"path": path, "requests": stats["count"], "avg_ms": round(stats["total_ms"] / max(stats["count"], 1), 2)} for path, stats in top_endpoints],
     })
 
 
 @app.get("/api/notifications")
 async def get_notifications(limit: int = 50, user: dict = Depends(require_auth)):
+    # Try MongoDB first
+    try:
+        notifs = await NotificationOps.find_recent(limit=limit, user_id=user.get("sub", ""))
+        if notifs:
+            return api_response(notifs)
+    except Exception:
+        pass
     return api_response(_notifications[-limit:])
 
 
@@ -716,12 +770,27 @@ async def dashboard_snapshot(company: str = "Default Company"):
     cached = await cache_get(f"ibms:kpi:{company}")
     if cached:
         return {"company": company, "kpi": json.loads(cached)}
+    # Try MongoDB
+    try:
+        kpi = await KPIOps.get_latest(company)
+        if kpi:
+            kpi.pop("_id", None)
+            return {"company": company, "kpi": kpi}
+    except Exception:
+        pass
     kpi = _kpi_store.get(company) or await refresh_kpis(company)
     return {"company": company, "kpi": kpi}
 
 
 @app.get("/api/dashboard/history")
 async def kpi_history(limit: int = 50):
+    # Try MongoDB first
+    try:
+        history = await KPIOps.get_history(limit=limit)
+        if history:
+            return api_response(history)
+    except Exception:
+        pass
     return api_response(_kpi_history[-limit:])
 
 

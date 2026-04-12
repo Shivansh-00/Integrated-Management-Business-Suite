@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 .venv/
+.venv2/
 *.egg-info/
 .env
 node_modules/

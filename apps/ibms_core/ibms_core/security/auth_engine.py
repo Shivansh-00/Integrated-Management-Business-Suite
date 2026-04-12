@@ -345,71 +345,95 @@ def decode_jwt(token: str, secret: str) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
-# Refresh Token Rotation
+# Refresh Token Rotation (MongoDB-backed)
 # ---------------------------------------------------------------------------
-_refresh_tokens: dict[str, dict] = {}
-_revoked_tokens: set[str] = set()
-
 
 def issue_refresh_token(user_id: str, device_fp: str = "") -> str:
-    """Issue a new refresh token with rotation support."""
+    """Issue a new refresh token with rotation support — persisted to MongoDB."""
     token = secrets.token_urlsafe(64)
-    _refresh_tokens[token] = {
-        "user_id": user_id,
-        "device_fp": device_fp,
-        "issued_at": int(time.time()),
-        "expires_at": int(time.time()) + 604800,  # 7 days
-        "family": str(uuid.uuid4()),
-    }
+    try:
+        RefreshTokenOps.create(token=token, user_id=user_id, device_fp=device_fp)
+    except Exception:
+        # Fallback to in-memory
+        _refresh_tokens_fallback[token] = {
+            "user_id": user_id,
+            "device_fp": device_fp,
+            "issued_at": int(time.time()),
+            "expires_at": int(time.time()) + 604800,
+            "family": str(uuid.uuid4()),
+        }
     return token
 
 
-def rotate_refresh_token(old_token: str, device_fp: str = "") -> tuple[str, str] | None:
-    """Rotate refresh token — invalidate old, issue new."""
-    if old_token in _revoked_tokens:
-        # Token reuse detected — revoke entire family
-        family = None
-        for t, data in list(_refresh_tokens.items()):
-            if data.get("family") == family:
-                _revoked_tokens.add(t)
-                del _refresh_tokens[t]
-        return None
+# In-memory fallback for refresh tokens
+_refresh_tokens_fallback: dict[str, dict] = {}
 
-    token_data = _refresh_tokens.get(old_token)
+
+def rotate_refresh_token(old_token: str, device_fp: str = "") -> tuple[str, str] | None:
+    """Rotate refresh token — invalidate old, issue new. MongoDB-backed."""
+    try:
+        # Check if token was already revoked (reuse attack)
+        if RefreshTokenOps.is_revoked(old_token):
+            return None
+
+        token_data = RefreshTokenOps.find_by_token(old_token)
+        if not token_data:
+            # Try fallback
+            return _rotate_fallback(old_token, device_fp)
+
+        if device_fp and token_data.get("device_fp") and token_data["device_fp"] != device_fp:
+            RefreshTokenOps.revoke(old_token)
+            return None
+
+        # Revoke old token
+        RefreshTokenOps.revoke(old_token)
+
+        # Issue new
+        new_token = secrets.token_urlsafe(64)
+        RefreshTokenOps.create(
+            token=new_token,
+            user_id=token_data["user_id"],
+            device_fp=device_fp,
+            family=token_data.get("family", ""),
+        )
+
+        return token_data["user_id"], new_token
+    except Exception:
+        return _rotate_fallback(old_token, device_fp)
+
+
+def _rotate_fallback(old_token: str, device_fp: str) -> tuple[str, str] | None:
+    """In-memory fallback for refresh token rotation."""
+    token_data = _refresh_tokens_fallback.get(old_token)
     if not token_data:
         return None
-
     if token_data["expires_at"] < int(time.time()):
-        del _refresh_tokens[old_token]
+        del _refresh_tokens_fallback[old_token]
         return None
-
     if device_fp and token_data.get("device_fp") and token_data["device_fp"] != device_fp:
-        _revoked_tokens.add(old_token)
         return None
-
-    # Revoke old token
-    _revoked_tokens.add(old_token)
-    family = token_data["family"]
-
-    # Issue new
+    del _refresh_tokens_fallback[old_token]
     new_token = secrets.token_urlsafe(64)
-    _refresh_tokens[new_token] = {
+    _refresh_tokens_fallback[new_token] = {
         "user_id": token_data["user_id"],
         "device_fp": device_fp,
         "issued_at": int(time.time()),
         "expires_at": int(time.time()) + 604800,
-        "family": family,
+        "family": token_data.get("family", str(uuid.uuid4())),
     }
-
     return token_data["user_id"], new_token
 
 
 def revoke_all_tokens(user_id: str):
     """Revoke all refresh tokens for a user (logout everywhere)."""
-    for token, data in list(_refresh_tokens.items()):
-        if data["user_id"] == user_id:
-            _revoked_tokens.add(token)
-            del _refresh_tokens[token]
+    try:
+        RefreshTokenOps.revoke_all_for_user(user_id)
+    except Exception:
+        pass
+    # Also clear in-memory fallback
+    for token in list(_refresh_tokens_fallback):
+        if _refresh_tokens_fallback[token]["user_id"] == user_id:
+            del _refresh_tokens_fallback[token]
 
 
 # ---------------------------------------------------------------------------
@@ -433,7 +457,7 @@ class RateLimitEntry:
     locked_until: float = 0
 
 
-_rate_limits: dict[str, RateLimitEntry] = defaultdict(RateLimitEntry)
+_rate_limits_fallback: dict[str, RateLimitEntry] = defaultdict(RateLimitEntry)
 
 # Config
 MAX_LOGIN_ATTEMPTS = 5
@@ -442,74 +466,91 @@ RATE_WINDOW = 900  # 15 minutes
 
 
 def check_rate_limit(key: str) -> dict:
-    """Check if a key (IP/user) is rate-limited."""
-    entry = _rate_limits[key]
+    """Check if a key (IP/user) is rate-limited. MongoDB-backed."""
     now = time.time()
-
-    # Check lockout
-    if entry.locked_until > now:
-        remaining = int(entry.locked_until - now)
-        return {
-            "allowed": False,
-            "reason": "Account temporarily locked",
-            "retry_after": remaining,
-            "attempts": entry.attempts,
-        }
-
-    # Reset window
-    if entry.first_attempt and (now - entry.first_attempt) > RATE_WINDOW:
-        entry.attempts = 0
-        entry.first_attempt = 0
-
-    return {
-        "allowed": True,
-        "attempts": entry.attempts,
-        "remaining": MAX_LOGIN_ATTEMPTS - entry.attempts,
-    }
+    try:
+        doc = RateLimitOps.get(key)
+        if doc:
+            if doc.get("locked_until", 0) > now:
+                remaining = int(doc["locked_until"] - now)
+                return {"allowed": False, "reason": "Account temporarily locked", "retry_after": remaining, "attempts": doc.get("attempts", 0)}
+            if doc.get("first_attempt") and (now - doc["first_attempt"]) > RATE_WINDOW:
+                RateLimitOps.reset(key)
+                return {"allowed": True, "attempts": 0, "remaining": MAX_LOGIN_ATTEMPTS}
+            return {"allowed": True, "attempts": doc.get("attempts", 0), "remaining": MAX_LOGIN_ATTEMPTS - doc.get("attempts", 0)}
+        return {"allowed": True, "attempts": 0, "remaining": MAX_LOGIN_ATTEMPTS}
+    except Exception:
+        # Fallback to in-memory
+        entry = _rate_limits_fallback[key]
+        if entry.locked_until > now:
+            remaining = int(entry.locked_until - now)
+            return {"allowed": False, "reason": "Account temporarily locked", "retry_after": remaining, "attempts": entry.attempts}
+        if entry.first_attempt and (now - entry.first_attempt) > RATE_WINDOW:
+            entry.attempts = 0
+            entry.first_attempt = 0
+        return {"allowed": True, "attempts": entry.attempts, "remaining": MAX_LOGIN_ATTEMPTS - entry.attempts}
 
 
 def record_failed_attempt(key: str):
-    """Record a failed login attempt."""
-    entry = _rate_limits[key]
+    """Record a failed login attempt. MongoDB-backed."""
     now = time.time()
-
-    if not entry.first_attempt:
-        entry.first_attempt = now
-
-    entry.attempts += 1
-
-    if entry.attempts >= MAX_LOGIN_ATTEMPTS:
-        entry.locked_until = now + LOCKOUT_DURATION
+    try:
+        doc = RateLimitOps.get(key)
+        attempts = (doc.get("attempts", 0) if doc else 0) + 1
+        updates = {"attempts": attempts, "key": key}
+        if not doc or not doc.get("first_attempt"):
+            updates["first_attempt"] = now
+        if attempts >= MAX_LOGIN_ATTEMPTS:
+            updates["locked_until"] = now + LOCKOUT_DURATION
+        RateLimitOps.upsert(key, updates)
+    except Exception:
+        entry = _rate_limits_fallback[key]
+        if not entry.first_attempt:
+            entry.first_attempt = now
+        entry.attempts += 1
+        if entry.attempts >= MAX_LOGIN_ATTEMPTS:
+            entry.locked_until = now + LOCKOUT_DURATION
 
 
 def reset_rate_limit(key: str):
     """Reset rate limit after successful login."""
-    if key in _rate_limits:
-        del _rate_limits[key]
+    try:
+        RateLimitOps.reset(key)
+    except Exception:
+        if key in _rate_limits_fallback:
+            del _rate_limits_fallback[key]
 
 
 # ---------------------------------------------------------------------------
-# CSRF Protection
+# CSRF Protection (MongoDB-backed)
 # ---------------------------------------------------------------------------
-_csrf_tokens: dict[str, float] = {}
-
 
 def generate_csrf_token(session_id: str) -> str:
-    """Generate a CSRF token tied to a session."""
+    """Generate a CSRF token tied to a session — persisted to MongoDB."""
     token = secrets.token_urlsafe(32)
-    _csrf_tokens[token] = time.time() + 7200  # 2h expiry
+    expires_at = time.time() + 7200  # 2h expiry
+    try:
+        CSRFOps.create(token, expires_at)
+    except Exception:
+        _csrf_tokens_fallback[token] = expires_at
     return token
 
 
+_csrf_tokens_fallback: dict[str, float] = {}
+
+
 def validate_csrf_token(token: str) -> bool:
-    """Validate a CSRF token."""
-    expiry = _csrf_tokens.get(token)
-    if not expiry:
-        return False
-    if time.time() > expiry:
-        del _csrf_tokens[token]
-        return False
-    return True
+    """Validate a CSRF token from MongoDB."""
+    try:
+        return CSRFOps.validate(token)
+    except Exception:
+        expiry = _csrf_tokens_fallback.get(token)
+        if not expiry:
+            return False
+        if time.time() > expiry:
+            del _csrf_tokens_fallback[token]
+            return False
+        return True
 
 
 # ---------------------------------------------------------------------------
@@ -531,44 +572,86 @@ class User:
     failed_attempts: int = 0
 
 
-_users: dict[str, User] = {}
-_user_by_email: dict[str, str] = {}
-_user_by_username: dict[str, str] = {}
+# ---------------------------------------------------------------------------
+# MongoDB-backed User Store
+# ---------------------------------------------------------------------------
+from ibms_core.database.models import UserOps, AuditOps, RefreshTokenOps, RateLimitOps, CSRFOps
+
+# In-memory fallback caches (used only when MongoDB is unreachable)
+_users_fallback: dict[str, dict] = {}
+_user_by_username_fallback: dict[str, str] = {}
+_user_by_email_fallback: dict[str, str] = {}
+
+
+def _get_user_by_identifier(identifier: str) -> dict | None:
+    """Find user by username or email — MongoDB first, fallback to memory."""
+    try:
+        user = UserOps.find_by_username_or_email(identifier)
+        if user:
+            return user
+    except Exception:
+        pass
+    # Fallback
+    uid = _user_by_username_fallback.get(identifier) or _user_by_email_fallback.get(identifier)
+    return _users_fallback.get(uid) if uid else None
+
+
+def _get_user_by_id(user_id: str) -> dict | None:
+    """Find user by ID — MongoDB first, fallback to memory."""
+    try:
+        user = UserOps.find_by_id(user_id)
+        if user:
+            return user
+    except Exception:
+        pass
+    return _users_fallback.get(user_id)
 
 
 def _init_default_users():
-    """Initialize default admin user."""
-    if "admin" not in _user_by_username:
-        admin_id = str(uuid.uuid4())
-        admin = User(
-            id=admin_id,
-            email="admin@ibms.dev",
-            username="admin",
-            password_hash=hash_password("Admin@IBMS2026"),
-            role="super_admin",
-            is_active=True,
-            is_verified=True,
-            created_at=datetime.now(timezone.utc).isoformat(),
-        )
-        _users[admin_id] = admin
-        _user_by_email["admin@ibms.dev"] = admin_id
-        _user_by_username["admin"] = admin_id
+    """Initialize default admin user in MongoDB if not present."""
+    try:
+        if not UserOps.exists_by_username("admin") and not UserOps.exists_by_email("admin@ibms.dev"):
+            UserOps.create(
+                email="admin@ibms.dev",
+                username="admin",
+                password_hash=hash_password("Admin@IBMS2026"),
+                role="super_admin",
+                is_active=True,
+                is_verified=True,
+            )
+        if not UserOps.exists_by_username("analyst") and not UserOps.exists_by_email("analyst@ibms.dev"):
+            UserOps.create(
+                email="analyst@ibms.dev",
+                username="analyst",
+                password_hash=hash_password("Analyst@2026"),
+                role="analyst",
+                is_active=True,
+                is_verified=True,
+            )
+    except Exception:
+        # MongoDB not available yet — create in-memory fallback
+        if "admin" not in _user_by_username_fallback:
+            admin_id = str(uuid.uuid4())
+            _users_fallback[admin_id] = {
+                "user_id": admin_id, "email": "admin@ibms.dev", "username": "admin",
+                "password_hash": hash_password("Admin@IBMS2026"), "role": "super_admin",
+                "is_active": True, "is_verified": True, "totp_secret": None,
+                "totp_enabled": False, "created_at": datetime.now(timezone.utc).isoformat(),
+                "last_login": None, "failed_attempts": 0,
+            }
+            _user_by_email_fallback["admin@ibms.dev"] = admin_id
+            _user_by_username_fallback["admin"] = admin_id
 
-        # Demo analyst
-        analyst_id = str(uuid.uuid4())
-        analyst = User(
-            id=analyst_id,
-            email="analyst@ibms.dev",
-            username="analyst",
-            password_hash=hash_password("Analyst@2026"),
-            role="analyst",
-            is_active=True,
-            is_verified=True,
-            created_at=datetime.now(timezone.utc).isoformat(),
-        )
-        _users[analyst_id] = analyst
-        _user_by_email["analyst@ibms.dev"] = analyst_id
-        _user_by_username["analyst"] = analyst_id
+            analyst_id = str(uuid.uuid4())
+            _users_fallback[analyst_id] = {
+                "user_id": analyst_id, "email": "analyst@ibms.dev", "username": "analyst",
+                "password_hash": hash_password("Analyst@2026"), "role": "analyst",
+                "is_active": True, "is_verified": True, "totp_secret": None,
+                "totp_enabled": False, "created_at": datetime.now(timezone.utc).isoformat(),
+                "last_login": None, "failed_attempts": 0,
+            }
+            _user_by_email_fallback["analyst@ibms.dev"] = analyst_id
+            _user_by_username_fallback["analyst"] = analyst_id
 
 
 _init_default_users()
@@ -590,33 +673,40 @@ class AuthResult:
     permissions: list[str] = field(default_factory=list)
 
 
-# Audit log (in-memory, production: ship to SIEM)
-_audit_log: list[dict] = []
+# Audit log (MongoDB-backed with in-memory fallback)
+_audit_log_fallback: list[dict] = []
 
 
 def audit_event(event_type: str, user_id: str = "", ip: str = "", details: dict | None = None):
-    """Record an audit event."""
-    entry = {
-        "id": str(uuid.uuid4()),
-        "type": event_type,
-        "user_id": user_id,
-        "ip": ip,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "details": details or {},
-    }
-    _audit_log.append(entry)
-    # Keep last 10000 entries
-    if len(_audit_log) > 10000:
-        _audit_log.pop(0)
-    return entry
+    """Record an audit event to MongoDB."""
+    try:
+        entry = AuditOps.create(event_type=event_type, user_id=user_id, ip=ip, details=details)
+        return entry
+    except Exception:
+        # Fallback to in-memory
+        entry = {
+            "id": str(uuid.uuid4()),
+            "type": event_type,
+            "user_id": user_id,
+            "ip": ip,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "details": details or {},
+        }
+        _audit_log_fallback.append(entry)
+        if len(_audit_log_fallback) > 10000:
+            _audit_log_fallback.pop(0)
+        return entry
 
 
 def get_audit_log(limit: int = 100, event_type: str = "") -> list[dict]:
-    """Retrieve audit log entries."""
-    logs = _audit_log
-    if event_type:
-        logs = [e for e in logs if e["type"] == event_type]
-    return list(reversed(logs[-limit:]))
+    """Retrieve audit log entries from MongoDB."""
+    try:
+        return AuditOps.find(limit=limit, event_type=event_type)
+    except Exception:
+        logs = _audit_log_fallback
+        if event_type:
+            logs = [e for e in logs if e.get("type") == event_type]
+        return list(reversed(logs[-limit:]))
 
 
 def authenticate(
@@ -627,7 +717,7 @@ def authenticate(
     device_fp: str = "",
     totp_code: str = "",
 ) -> AuthResult:
-    """Full authentication flow."""
+    """Full authentication flow with MongoDB user store."""
     # Rate limit check
     rate_key = f"login:{ip}"
     rate_check = check_rate_limit(rate_key)
@@ -638,30 +728,30 @@ def authenticate(
             error=f"Too many attempts. Retry after {rate_check['retry_after']}s",
         )
 
-    # Find user
-    user_id = _user_by_username.get(username) or _user_by_email.get(username)
-    if not user_id:
+    # Find user from MongoDB (or fallback)
+    user = _get_user_by_identifier(username)
+    if not user:
         record_failed_attempt(rate_key)
         audit_event("login_failed", ip=ip, details={"reason": "user_not_found", "username": username})
         return AuthResult(success=False, error="Invalid credentials")
 
-    user = _users[user_id]
+    user_id = user["user_id"]
 
-    if not user.is_active:
+    if not user.get("is_active", True):
         audit_event("login_failed", user_id=user_id, ip=ip, details={"reason": "account_disabled"})
         return AuthResult(success=False, error="Account is disabled")
 
     # Verify password
-    if not verify_password(password, user.password_hash):
+    if not verify_password(password, user["password_hash"]):
         record_failed_attempt(rate_key)
         audit_event("login_failed", user_id=user_id, ip=ip, details={"reason": "invalid_password"})
         return AuthResult(success=False, error="Invalid credentials")
 
     # 2FA check
-    if user.totp_enabled:
+    if user.get("totp_enabled"):
         if not totp_code:
             return AuthResult(success=False, requires_2fa=True, user_id=user_id)
-        if not verify_totp(user.totp_secret, totp_code):
+        if not verify_totp(user.get("totp_secret", ""), totp_code):
             record_failed_attempt(rate_key)
             audit_event("login_failed", user_id=user_id, ip=ip, details={"reason": "invalid_2fa"})
             return AuthResult(success=False, error="Invalid 2FA code")
@@ -669,13 +759,14 @@ def authenticate(
     # Success — issue tokens
     reset_rate_limit(rate_key)
 
-    permissions = list(resolve_permissions(user.role))
+    role = user.get("role", "viewer")
+    permissions = list(resolve_permissions(role))
     access_token = create_jwt(
         {
             "sub": user_id,
-            "username": user.username,
-            "email": user.email,
-            "role": user.role,
+            "username": user["username"],
+            "email": user["email"],
+            "role": role,
             "permissions": permissions,
         },
         jwt_secret,
@@ -686,8 +777,11 @@ def authenticate(
     refresh_token = issue_refresh_token(user_id, device_fp)
     csrf_token = generate_csrf_token(user_id)
 
-    user.last_login = datetime.now(timezone.utc).isoformat()
-    user.failed_attempts = 0
+    # Update last login in MongoDB
+    try:
+        UserOps.record_login(user_id)
+    except Exception:
+        pass
 
     audit_event("login_success", user_id=user_id, ip=ip, details={"device_fp": device_fp})
 
@@ -697,7 +791,7 @@ def authenticate(
         access_token=access_token,
         refresh_token=refresh_token,
         csrf_token=csrf_token,
-        role=user.role,
+        role=role,
         permissions=permissions,
     )
 
@@ -708,81 +802,106 @@ def register_user(
     password: str,
     role: str = "viewer",
 ) -> dict:
-    """Register a new user."""
-    # Validate
-    if _user_by_username.get(username):
-        return {"success": False, "error": "Username already exists"}
-    if _user_by_email.get(email):
-        return {"success": False, "error": "Email already registered"}
+    """Register a new user in MongoDB."""
+    # Validate uniqueness
+    try:
+        if UserOps.exists_by_username(username):
+            return {"success": False, "error": "Username already exists"}
+        if UserOps.exists_by_email(email):
+            return {"success": False, "error": "Email already registered"}
+    except Exception:
+        # Fallback check
+        if _user_by_username_fallback.get(username):
+            return {"success": False, "error": "Username already exists"}
+        if _user_by_email_fallback.get(email):
+            return {"success": False, "error": "Email already registered"}
 
     strength = check_password_strength(password)
     if not strength["valid"]:
         return {"success": False, "error": "Weak password", "details": strength}
 
-    user_id = str(uuid.uuid4())
-    user = User(
-        id=user_id,
-        email=email,
-        username=username,
-        password_hash=hash_password(password),
-        role=role if role in ROLE_HIERARCHY else "viewer",
-        is_active=True,
-        is_verified=False,
-        created_at=datetime.now(timezone.utc).isoformat(),
-    )
+    safe_role = role if role in ROLE_HIERARCHY else "viewer"
+    password_hash = hash_password(password)
 
-    _users[user_id] = user
-    _user_by_email[email] = user_id
-    _user_by_username[username] = user_id
+    try:
+        user_doc = UserOps.create(
+            email=email,
+            username=username,
+            password_hash=password_hash,
+            role=safe_role,
+            is_active=True,
+            is_verified=False,
+        )
+        user_id = user_doc["user_id"]
+    except Exception:
+        # Fallback to in-memory
+        user_id = str(uuid.uuid4())
+        _users_fallback[user_id] = {
+            "user_id": user_id, "email": email, "username": username,
+            "password_hash": password_hash, "role": safe_role,
+            "is_active": True, "is_verified": False, "totp_secret": None,
+            "totp_enabled": False, "created_at": datetime.now(timezone.utc).isoformat(),
+            "last_login": None, "failed_attempts": 0,
+        }
+        _user_by_email_fallback[email] = user_id
+        _user_by_username_fallback[username] = user_id
 
-    audit_event("user_registered", user_id=user_id, details={"username": username, "role": role})
+    audit_event("user_registered", user_id=user_id, details={"username": username, "role": safe_role})
 
     return {
         "success": True,
         "user_id": user_id,
         "username": username,
         "email": email,
-        "role": role,
+        "role": safe_role,
     }
 
 
 def get_user_profile(user_id: str) -> dict | None:
-    """Get user profile (safe, no password hash)."""
-    user = _users.get(user_id)
+    """Get user profile from MongoDB (safe, no password hash)."""
+    user = _get_user_by_id(user_id)
     if not user:
         return None
     return {
-        "id": user.id,
-        "username": user.username,
-        "email": user.email,
-        "role": user.role,
-        "permissions": list(resolve_permissions(user.role)),
-        "is_active": user.is_active,
-        "is_verified": user.is_verified,
-        "totp_enabled": user.totp_enabled,
-        "created_at": user.created_at,
-        "last_login": user.last_login,
+        "id": user["user_id"],
+        "username": user["username"],
+        "email": user["email"],
+        "role": user.get("role", "viewer"),
+        "permissions": list(resolve_permissions(user.get("role", "viewer"))),
+        "is_active": user.get("is_active", True),
+        "is_verified": user.get("is_verified", False),
+        "totp_enabled": user.get("totp_enabled", False),
+        "created_at": user.get("created_at", ""),
+        "last_login": user.get("last_login"),
     }
 
 
 def setup_2fa(user_id: str) -> dict | None:
     """Enable 2FA for a user."""
-    user = _users.get(user_id)
+    user = _get_user_by_id(user_id)
     if not user:
         return None
     secret = generate_totp_secret()
-    user.totp_secret = secret
-    uri = get_totp_uri(secret, user.email)
+    try:
+        UserOps.set_totp(user_id, secret, False)
+    except Exception:
+        if user_id in _users_fallback:
+            _users_fallback[user_id]["totp_secret"] = secret
+    uri = get_totp_uri(secret, user["email"])
     return {"secret": secret, "uri": uri}
 
 
 def confirm_2fa(user_id: str, code: str) -> bool:
     """Confirm 2FA setup with initial code."""
-    user = _users.get(user_id)
-    if not user or not user.totp_secret:
+    user = _get_user_by_id(user_id)
+    if not user or not user.get("totp_secret"):
         return False
-    if verify_totp(user.totp_secret, code):
-        user.totp_enabled = True
+    if verify_totp(user["totp_secret"], code):
+        try:
+            UserOps.set_totp(user_id, user["totp_secret"], True)
+        except Exception:
+            if user_id in _users_fallback:
+                _users_fallback[user_id]["totp_enabled"] = True
         audit_event("2fa_enabled", user_id=user_id)
         return True
     return False
@@ -790,10 +909,14 @@ def confirm_2fa(user_id: str, code: str) -> bool:
 
 def disable_2fa(user_id: str) -> bool:
     """Disable 2FA for a user."""
-    user = _users.get(user_id)
+    user = _get_user_by_id(user_id)
     if not user:
         return False
-    user.totp_enabled = False
-    user.totp_secret = None
+    try:
+        UserOps.set_totp(user_id, None, False)
+    except Exception:
+        if user_id in _users_fallback:
+            _users_fallback[user_id]["totp_enabled"] = False
+            _users_fallback[user_id]["totp_secret"] = None
     audit_event("2fa_disabled", user_id=user_id)
     return True
