@@ -5,7 +5,7 @@
 | **Project Name**   | Integrated Business Management Suite (IBMS) v2.0    |
 | **Team**           | Shivansh Srivastava (Product Developer), Prahallad Padhan (Product Owner), Ranveer Rai Khare (Scrum Master) |
 | **Sprint**         | Sprint 1                                            |
-| **Date**           | April 8, 2026                                       |
+| **Date**           | April 12, 2026                                      |
 | **Document Type**  | Functional Specification                            |
 
 ---

@@ -6,7 +6,7 @@
 | **Team**           | Shivansh Srivastava (Product Developer), Prahallad Padhan (Product Owner), Ranveer Rai Khare (Scrum Master) |
 | **Sprint**         | Sprint 1                                            |
 | **Sprint Duration**| 2 weeks                                             |
-| **Date**           | April 8, 2026                                       |
+| **Date**           | April 12, 2026                                      |
 | **Document Type**  | Sprint Retrospective                                |
 
 ---

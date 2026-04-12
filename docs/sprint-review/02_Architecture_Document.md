@@ -5,14 +5,14 @@
 | **Project Name**   | Integrated Business Management Suite (IBMS) v2.0    |
 | **Team**           | Shivansh Srivastava (Product Developer), Prahallad Padhan (Product Owner), Ranveer Rai Khare (Scrum Master) |
 | **Sprint**         | Sprint 1                                            |
-| **Date**           | April 8, 2026                                       |
+| **Date**           | April 12, 2026                                      |
 | **Document Type**  | System Architecture                                 |
 
 ---
 
 ## 1. System Overview
 
-IBMS follows a **monolithic backend + SPA frontend** architecture served from a single FastAPI process. The backend handles REST APIs, WebSocket connections, background scheduling, and static file serving. Redis is used as an optional caching layer with an automatic in-memory fallback.
+IBMS follows a **monolithic backend + SPA frontend** architecture served from a single FastAPI process. The backend handles REST APIs, WebSocket connections, background scheduling, and static file serving. **MongoDB 8.2** is the primary persistence layer (accessed via Motor async + PyMongo sync drivers). Redis is used as an optional caching layer with an automatic in-memory fallback.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -51,9 +51,9 @@ IBMS follows a **monolithic backend + SPA frontend** architecture served from a 
                     ┌──────────┼──────────┐
                     ▼                     ▼
           ┌─────────────────┐   ┌─────────────────┐
-          │   Redis 7       │   │   MariaDB 10.6  │
-          │   (Cache)       │   │   (via Frappe)  │
-          │   Port 6379     │   │   Port 3306     │
+          │   Redis 7       │   │   MongoDB 8.2   │
+          │   (Cache)       │   │   (Primary DB)  │
+          │   Port 6379     │   │   Port 27017    │
           └─────────────────┘   └─────────────────┘
 ```
 
@@ -176,21 +176,26 @@ apps/ibms_core/ibms_core/
 
 ```
 ┌───────────────────────────────┐     ┌───────────────────────────────┐
-│         Redis 7               │     │        MariaDB 10.6           │
-│   (Cache & Session Store)     │     │     (via Frappe ORM)          │
+│         Redis 7               │     │        MongoDB 8.2            │
+│   (Cache & Session Store)     │     │     (Motor async + PyMongo)   │
 │                               │     │                               │
-│  • KPI snapshot cache         │     │  • DocType tables             │
-│  • Rate limit counters        │     │  • User accounts              │
-│  • Session tokens             │     │  • KPI Snapshots              │
-│  • In-memory fallback if      │     │  • AI Recommendations         │
-│    Redis unavailable          │     │  • Webhook Logs               │
-│                               │     │  • Audit Events               │
-│  Config:                      │     │  • Enterprise Profiles        │
-│  • maxmemory: 256MB           │     │                               │
-│  • eviction: allkeys-lru      │     │  Config:                      │
-│  • appendonly: yes            │     │  • 100GB storage              │
-│                               │     │  • Multi-AZ (AWS)             │
-└───────────────────────────────┘     │  • 7-day backup retention     │
+│  • KPI snapshot cache         │     │  13 Collections:              │
+│  • Rate limit counters        │     │  • users (unique email/uname) │
+│  • Session tokens             │     │  • kpi_snapshots (time-series)│
+│  • In-memory fallback if      │     │  • kpi_latest (materialized)  │
+│    Redis unavailable          │     │  • audit_logs (timestamped)   │
+│                               │     │  • refresh_tokens (TTL index) │
+│  Config:                      │     │  • csrf_tokens (1hr TTL)      │
+│  • maxmemory: 256MB           │     │  • rate_limits                │
+│  • eviction: allkeys-lru      │     │  • notifications              │
+│  • appendonly: yes            │     │  • alerts, ai_recommendations │
+│                               │     │  • enterprise_profiles        │
+└───────────────────────────────┘     │  • webhook_logs, decision_rules│
+                                      │                               │
+                                      │  Config:                      │
+                                      │  • URI: localhost:27017        │
+                                      │  • DB: ibms_enterprise         │
+                                      │  • TTL indexes on tokens       │
                                       └───────────────────────────────┘
 ```
 
@@ -274,17 +279,17 @@ super_admin  ──→  Full Access (*)
 ### 4.1 Docker Compose (Development / Staging)
 
 ```
-┌──────────────────────────────────────────────────┐
-│              Docker Compose Network               │
-│                                                   │
-│  ┌──────────┐   ┌──────────────┐   ┌──────────┐ │
-│  │  Nginx   │──▶│   Web (API)  │──▶│  Redis   │ │
-│  │  :80     │   │   :8000      │   │  :6379   │ │
-│  │  alpine  │   │   python:3.11│   │  7-alpine│ │
-│  └──────────┘   └──────────────┘   └──────────┘ │
-│                                     │ Volume:    │
-│                                     │ redis_data │
-└──────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│                   Docker Compose Network                       │
+│                                                                │
+│  ┌──────────┐   ┌──────────────┐   ┌──────────┐ ┌──────────┐ │
+│  │  Nginx   │──▶│   Web (API)  │──▶│  Redis   │ │ MongoDB  │ │
+│  │  :80     │   │   :8000      │   │  :6379   │ │  :27017  │ │
+│  │  alpine  │   │   python:3.11│   │  7-alpine│ │  mongo:7 │ │
+│  └──────────┘   └──────────────┘   └──────────┘ └──────────┘ │
+│                                     │ Volumes:   │ Volume:   │
+│                                     │ redis_data │ mongo_data│
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ### 4.2 Kubernetes (Production)
@@ -325,11 +330,12 @@ super_admin  ──→  Full Access (*)
 │  ┌────────────────────┐          ┌────────────────────┐        │
 │  │ Private Subnet AZ-1│          │ Private Subnet AZ-2│        │
 │  │  10.70.1.0/24      │          │  10.70.2.0/24      │        │
+│  │                    │          │                    │        │
 │  │                    │          │                    │         │
 │  │  ┌──────────────┐ │          │  ┌──────────────┐ │         │
-│  │  │ RDS MariaDB  │ │◄────────►│  │ RDS Standby  │ │         │
-│  │  │ t3.medium    │ │ Multi-AZ │  │ (Failover)   │ │         │
-│  │  │ 100GB gp3    │ │          │  │              │ │         │
+│  │  │ MongoDB 8.2  │ │◄────────►│  │ Replica Set │ │         │
+│  │  │ (Atlas /    │ │ Replica  │  │ (Failover)   │ │         │
+│  │  │  DocumentDB) │ │          │  │              │ │         │
 │  │  └──────────────┘ │          │  └──────────────┘ │         │
 │  │                    │          │                    │         │
 │  │  ┌──────────────┐ │          │  ┌──────────────┐ │         │
@@ -339,11 +345,14 @@ super_admin  ──→  Full Access (*)
 │  │  └──────────────┘ │          │  └──────────────┘ │         │
 │  └────────────────────┘          └────────────────────┘        │
 │                                                                 │
+│  Note: MongoDB runs locally for dev; production can use         │
+│  MongoDB Atlas or DocumentDB in private subnets.                │
+│                                                                 │
 │  Security:                                                      │
 │  • App SG: Port 8000 (internal only)                           │
-│  • RDS: Private subnet, no public IP                            │
+│  • MongoDB: Private subnet, auth enabled                        │
 │  • Redis: At-rest + transit encryption, private subnet          │
-│  • RDS Backups: 7-day retention                                 │
+│  • Backups: 7-day retention (MongoDB Atlas / AWS Backup)        │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
