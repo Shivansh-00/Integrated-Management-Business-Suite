@@ -7,12 +7,14 @@ Produces professionally formatted PDFs with:
 - Clean typography with consistent spacing
 """
 
+import argparse
 import os
 import re
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
 SPRINT_DIR = os.path.join(os.path.dirname(__file__), "..", "docs", "sprint-review")
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 # ── Layout ────────────────────────────────────────────────────────
 LEFT_MARGIN  = 18
@@ -21,6 +23,23 @@ TOP_MARGIN   = 22
 BOTTOM_MARGIN = 22
 PAGE_W       = 210
 CONTENT_W    = PAGE_W - LEFT_MARGIN - RIGHT_MARGIN  # 174 mm
+
+
+def set_layout_profile(profile="default"):
+    """Allow wider content area for print-focused exports."""
+    global LEFT_MARGIN, RIGHT_MARGIN, TOP_MARGIN, BOTTOM_MARGIN, PAGE_W, CONTENT_W
+    if profile == "print-wide":
+        LEFT_MARGIN = 10
+        RIGHT_MARGIN = 10
+        TOP_MARGIN = 14
+        BOTTOM_MARGIN = 14
+    else:
+        LEFT_MARGIN = 18
+        RIGHT_MARGIN = 18
+        TOP_MARGIN = 22
+        BOTTOM_MARGIN = 22
+    PAGE_W = 210
+    CONTENT_W = PAGE_W - LEFT_MARGIN - RIGHT_MARGIN
 
 # ── Colours ───────────────────────────────────────────────────────
 C_PRIMARY      = (30, 50, 95)
@@ -121,6 +140,61 @@ class MarkdownPDF(FPDF):
             self.add_page()
 
 
+def _resolve_image_path(md_path, image_ref):
+    """Resolve relative or absolute image reference from markdown."""
+    if not image_ref:
+        return None
+    image_ref = image_ref.strip().strip('"').strip("'")
+    if os.path.isabs(image_ref):
+        return image_ref if os.path.exists(image_ref) else None
+
+    md_dir = os.path.dirname(os.path.abspath(md_path))
+    candidate = os.path.normpath(os.path.join(md_dir, image_ref))
+    if os.path.exists(candidate):
+        return candidate
+
+    candidate = os.path.normpath(os.path.join(REPO_ROOT, image_ref))
+    if os.path.exists(candidate):
+        return candidate
+    return None
+
+
+def _find_mermaid_image(md_path):
+    """Find a pre-rendered diagram image for the markdown document."""
+    base = os.path.splitext(os.path.basename(md_path))[0]
+    md_dir = os.path.dirname(os.path.abspath(md_path))
+    docs_dir = os.path.join(REPO_ROOT, "docs")
+
+    candidates = [
+        os.path.join(md_dir, f"{base}.png"),
+        os.path.join(md_dir, f"{base.lower()}.png"),
+        os.path.join(docs_dir, f"{base}.png"),
+        os.path.join(docs_dir, f"{base.lower()}.png"),
+    ]
+
+    if base.lower() == "architecture":
+        candidates.insert(0, os.path.join(docs_dir, "architecture.png"))
+
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def render_image(pdf, image_path, preferred_h=130):
+    """Render image with consistent print spacing and margins."""
+    if not image_path or not os.path.exists(image_path):
+        return
+
+    pdf.ln(3)
+    pdf.need_space(preferred_h + 8)
+    y0 = pdf.get_y()
+    max_h = max(60, pdf.h - BOTTOM_MARGIN - y0)
+    h = min(preferred_h, max_h)
+    pdf.image(image_path, x=LEFT_MARGIN, y=y0, w=CONTENT_W, h=h, keep_aspect_ratio=True)
+    pdf.set_y(y0 + h + 3)
+
+
 # ══════════════════════════════════════════════════════════════════
 #  Markdown parser
 # ══════════════════════════════════════════════════════════════════
@@ -129,6 +203,7 @@ def parse_blocks(md_text):
     blocks = []
     i = 0
     in_code = False
+    code_lang = ""
     code_lines = []
     in_table = False
     table_rows = []
@@ -146,12 +221,18 @@ def parse_blocks(md_text):
         # ── code fence ────
         if line.strip().startswith('```'):
             if in_code:
-                blocks.append(('code', '\n'.join(code_lines)))
+                code_text = '\n'.join(code_lines)
+                if code_lang == 'mermaid':
+                    blocks.append(('mermaid', code_text))
+                else:
+                    blocks.append(('code', code_text))
                 code_lines = []
                 in_code = False
+                code_lang = ""
             else:
                 flush_table()
                 in_code = True
+                code_lang = line.strip()[3:].strip().lower()
             i += 1
             continue
         if in_code:
@@ -171,6 +252,13 @@ def parse_blocks(md_text):
             continue
         else:
             flush_table()
+
+        # ── image ────
+        im = re.match(r'^\s*!\[[^\]]*\]\(([^)]+)\)\s*$', line)
+        if im:
+            blocks.append(('image', im.group(1).strip()))
+            i += 1
+            continue
 
         # ── heading ────
         m = re.match(r'^(#{1,6})\s+(.*)', line)
@@ -615,7 +703,7 @@ def render_blockquote(pdf, text):
 # ══════════════════════════════════════════════════════════════════
 #  Main block dispatcher
 # ══════════════════════════════════════════════════════════════════
-def render_blocks(pdf, blocks):
+def render_blocks(pdf, blocks, md_path):
     page_break_y = pdf.h - BOTTOM_MARGIN
 
     for block in blocks:
@@ -734,6 +822,21 @@ def render_blocks(pdf, blocks):
         elif btype == 'code':
             render_code(pdf, block[1])
 
+        # ── MERMAID ───────────────────────────────────────────────
+        elif btype == 'mermaid':
+            image_path = _find_mermaid_image(md_path)
+            if image_path:
+                render_image(pdf, image_path, preferred_h=140)
+            else:
+                # Fallback to source text if no rendered diagram exists.
+                render_code(pdf, block[1])
+
+        # ── IMAGE ─────────────────────────────────────────────────
+        elif btype == 'image':
+            image_path = _resolve_image_path(md_path, block[1])
+            if image_path:
+                render_image(pdf, image_path, preferred_h=130)
+
         # ── TABLE ─────────────────────────────────────────────────
         elif btype == 'table':
             render_table(pdf, block[1])
@@ -758,7 +861,10 @@ def render_blocks(pdf, blocks):
 #  Entry point
 # ══════════════════════════════════════════════════════════════════
 def convert_md_to_pdf(md_path, pdf_path):
-    with open(md_path, 'r', encoding='utf-8') as f:
+    profile = "print-wide" if os.path.basename(md_path).lower() == "architecture.md" else "default"
+    set_layout_profile(profile)
+
+    with open(md_path, encoding='utf-8') as f:
         md_text = f.read()
 
     title_match = re.match(r'^#\s+(.+)', md_text)
@@ -770,13 +876,30 @@ def convert_md_to_pdf(md_path, pdf_path):
     pdf.add_page()
 
     blocks = parse_blocks(md_text)
-    render_blocks(pdf, blocks)
+    render_blocks(pdf, blocks, md_path)
 
     pdf.output(pdf_path)
     print(f"  Created: {os.path.basename(pdf_path)}")
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Convert markdown documents to print-ready PDF")
+    parser.add_argument("--input", dest="input_md", help="Path to a single markdown file")
+    parser.add_argument("--output", dest="output_pdf", help="Output PDF path for --input mode")
+    args = parser.parse_args()
+
+    if args.input_md:
+        md_path = os.path.abspath(args.input_md)
+        if not os.path.exists(md_path):
+            raise FileNotFoundError(f"Input markdown not found: {md_path}")
+        if args.output_pdf:
+            pdf_path = os.path.abspath(args.output_pdf)
+        else:
+            pdf_path = os.path.splitext(md_path)[0] + ".pdf"
+        convert_md_to_pdf(md_path, pdf_path)
+        print("\nDone. 1 file processed.")
+        return
+
     sprint_dir = os.path.abspath(SPRINT_DIR)
     print(f"Converting markdown files in: {sprint_dir}\n")
 

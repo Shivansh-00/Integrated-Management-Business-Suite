@@ -131,6 +131,32 @@
                 <span class="nav-item__label">Lead Scoring</span>
             </a>
 
+            <div class="sidebar__section-label">ERP Modules</div>
+            <a class="nav-item" data-page="customers" onclick="IBMS.nav.goto('customers')">
+                <span class="nav-item__icon">CU</span>
+                <span class="nav-item__label">Customers</span>
+            </a>
+            <a class="nav-item" data-page="products" onclick="IBMS.nav.goto('products')">
+                <span class="nav-item__icon">PD</span>
+                <span class="nav-item__label">Products</span>
+            </a>
+            <a class="nav-item" data-page="orders" onclick="IBMS.nav.goto('orders')">
+                <span class="nav-item__icon">OR</span>
+                <span class="nav-item__label">Orders</span>
+            </a>
+            <a class="nav-item" data-page="invoices" onclick="IBMS.nav.goto('invoices')">
+                <span class="nav-item__icon">IV</span>
+                <span class="nav-item__label">Invoices</span>
+            </a>
+            <a class="nav-item" data-page="inventory" onclick="IBMS.nav.goto('inventory')">
+                <span class="nav-item__icon">IN</span>
+                <span class="nav-item__label">Inventory</span>
+            </a>
+            <a class="nav-item" data-page="employees" onclick="IBMS.nav.goto('employees')">
+                <span class="nav-item__icon">HR</span>
+                <span class="nav-item__label">Employees</span>
+            </a>
+
             <div class="sidebar__section-label">System</div>
             <a class="nav-item" data-page="events" onclick="IBMS.nav.goto('events')">
                 <span class="nav-item__icon">EV</span>
@@ -585,6 +611,334 @@
                         <div class="result-box" id="leadResult"></div>
                     </div>
                 </section>
+            </div>
+        </main>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PAGE: CUSTOMERS (ERP)
+             ═══════════════════════════════════════════════════════════ -->
+        <main class="dashboard" id="page-customers" style="display:none">
+            <div class="dashboard__header">
+                <h1 class="dashboard__title">Customer Management</h1>
+                <p class="dashboard__subtitle">Manage customer accounts, segments, and credit</p>
+            </div>
+            <div class="erp-stats" id="customerStats"></div>
+            <div class="panels">
+                <section class="panel panel--full">
+                    <div class="panel__header">
+                        <h2 class="panel__title">Customers</h2>
+                        <div class="panel__actions">
+                            <input type="text" id="customerSearch" placeholder="Search customers…" class="input--sm" onkeyup="IBMS.erp.customers.load()">
+                            <select id="customerSegment" class="select--sm" onchange="IBMS.erp.customers.load()">
+                                <option value="">All Segments</option>
+                                <option value="enterprise">Enterprise</option>
+                                <option value="mid_market">Mid-Market</option>
+                                <option value="sme">SME</option>
+                                <option value="startup">Startup</option>
+                            </select>
+                            <button class="btn btn--primary btn--sm" onclick="IBMS.erp.customers.showForm()">+ Add Customer</button>
+                        </div>
+                    </div>
+                    <div class="panel__body">
+                        <div class="erp-table-wrap">
+                            <table class="erp-table" id="customerTable">
+                                <thead><tr><th>Name</th><th>Email</th><th>Company</th><th>Segment</th><th>Credit Limit</th><th>Outstanding</th><th>Status</th><th>Actions</th></tr></thead>
+                                <tbody id="customerTableBody"><tr><td colspan="8" class="erp-table__empty">Loading…</td></tr></tbody>
+                            </table>
+                        </div>
+                        <div class="erp-pagination" id="customerPagination"></div>
+                    </div>
+                </section>
+            </div>
+            <!-- Customer Form Modal -->
+            <div class="modal-overlay" id="customerModal" style="display:none">
+                <div class="modal">
+                    <div class="modal__header"><h3 id="customerModalTitle">Add Customer</h3><button class="modal__close" onclick="IBMS.erp.customers.hideForm()">&times;</button></div>
+                    <div class="modal__body">
+                        <input type="hidden" id="customerEditId">
+                        <div class="form-row"><label>Name *</label><input type="text" id="custName" class="input--sm" required></div>
+                        <div class="form-row"><label>Email</label><input type="email" id="custEmail" class="input--sm"></div>
+                        <div class="form-row"><label>Phone</label><input type="text" id="custPhone" class="input--sm"></div>
+                        <div class="form-row"><label>Company</label><input type="text" id="custCompany" class="input--sm"></div>
+                        <div class="form-grid-2">
+                            <div class="form-row"><label>Segment</label><select id="custSegment" class="select--sm"><option value="sme">SME</option><option value="enterprise">Enterprise</option><option value="mid_market">Mid-Market</option><option value="startup">Startup</option></select></div>
+                            <div class="form-row"><label>Credit Limit</label><input type="number" id="custCreditLimit" value="50000" class="input--sm"></div>
+                        </div>
+                        <div class="form-row"><label>Address</label><input type="text" id="custAddress" class="input--sm"></div>
+                        <div class="form-grid-2">
+                            <div class="form-row"><label>City</label><input type="text" id="custCity" class="input--sm"></div>
+                            <div class="form-row"><label>Country</label><input type="text" id="custCountry" class="input--sm"></div>
+                        </div>
+                    </div>
+                    <div class="modal__footer"><button class="btn btn--primary" onclick="IBMS.erp.customers.save()">Save Customer</button></div>
+                </div>
+            </div>
+        </main>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PAGE: PRODUCTS (ERP)
+             ═══════════════════════════════════════════════════════════ -->
+        <main class="dashboard" id="page-products" style="display:none">
+            <div class="dashboard__header">
+                <h1 class="dashboard__title">Product Catalog</h1>
+                <p class="dashboard__subtitle">Manage products, pricing, and stock levels</p>
+            </div>
+            <div class="erp-stats" id="productStats"></div>
+            <div class="panels">
+                <section class="panel panel--full">
+                    <div class="panel__header">
+                        <h2 class="panel__title">Products</h2>
+                        <div class="panel__actions">
+                            <input type="text" id="productSearch" placeholder="Search products…" class="input--sm" onkeyup="IBMS.erp.products.load()">
+                            <button class="btn btn--primary btn--sm" onclick="IBMS.erp.products.showForm()">+ Add Product</button>
+                        </div>
+                    </div>
+                    <div class="panel__body">
+                        <div class="erp-table-wrap">
+                            <table class="erp-table" id="productTable">
+                                <thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Unit Price</th><th>Cost</th><th>Stock</th><th>Reorder Lvl</th><th>Status</th><th>Actions</th></tr></thead>
+                                <tbody id="productTableBody"><tr><td colspan="9" class="erp-table__empty">Loading…</td></tr></tbody>
+                            </table>
+                        </div>
+                        <div class="erp-pagination" id="productPagination"></div>
+                    </div>
+                </section>
+            </div>
+            <div class="modal-overlay" id="productModal" style="display:none">
+                <div class="modal">
+                    <div class="modal__header"><h3 id="productModalTitle">Add Product</h3><button class="modal__close" onclick="IBMS.erp.products.hideForm()">&times;</button></div>
+                    <div class="modal__body">
+                        <input type="hidden" id="productEditId">
+                        <div class="form-grid-2">
+                            <div class="form-row"><label>Name *</label><input type="text" id="prodName" class="input--sm" required></div>
+                            <div class="form-row"><label>SKU *</label><input type="text" id="prodSku" class="input--sm" required></div>
+                        </div>
+                        <div class="form-row"><label>Category</label><input type="text" id="prodCategory" class="input--sm"></div>
+                        <div class="form-grid-2">
+                            <div class="form-row"><label>Unit Price</label><input type="number" id="prodUnitPrice" step="0.01" class="input--sm"></div>
+                            <div class="form-row"><label>Cost Price</label><input type="number" id="prodCostPrice" step="0.01" class="input--sm"></div>
+                        </div>
+                        <div class="form-grid-2">
+                            <div class="form-row"><label>Tax Rate %</label><input type="number" id="prodTaxRate" step="0.01" value="0" class="input--sm"></div>
+                            <div class="form-row"><label>Stock Qty</label><input type="number" id="prodStock" value="0" class="input--sm"></div>
+                        </div>
+                        <div class="form-row"><label>Reorder Level</label><input type="number" id="prodReorder" value="10" class="input--sm"></div>
+                        <div class="form-row"><label>Description</label><textarea id="prodDesc" class="input--sm" rows="2"></textarea></div>
+                    </div>
+                    <div class="modal__footer"><button class="btn btn--primary" onclick="IBMS.erp.products.save()">Save Product</button></div>
+                </div>
+            </div>
+        </main>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PAGE: ORDERS (ERP)
+             ═══════════════════════════════════════════════════════════ -->
+        <main class="dashboard" id="page-orders" style="display:none">
+            <div class="dashboard__header">
+                <h1 class="dashboard__title">Order Management</h1>
+                <p class="dashboard__subtitle">Track and manage sales orders</p>
+            </div>
+            <div class="erp-stats" id="orderStats"></div>
+            <div class="panels">
+                <section class="panel panel--full">
+                    <div class="panel__header">
+                        <h2 class="panel__title">Orders</h2>
+                        <div class="panel__actions">
+                            <select id="orderStatus" class="select--sm" onchange="IBMS.erp.orders.load()">
+                                <option value="">All Status</option>
+                                <option value="draft">Draft</option>
+                                <option value="confirmed">Confirmed</option>
+                                <option value="processing">Processing</option>
+                                <option value="shipped">Shipped</option>
+                                <option value="delivered">Delivered</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
+                            <button class="btn btn--primary btn--sm" onclick="IBMS.erp.orders.showForm()">+ New Order</button>
+                        </div>
+                    </div>
+                    <div class="panel__body">
+                        <div class="erp-table-wrap">
+                            <table class="erp-table" id="orderTable">
+                                <thead><tr><th>Order #</th><th>Customer</th><th>Status</th><th>Subtotal</th><th>Tax</th><th>Total</th><th>Date</th><th>Actions</th></tr></thead>
+                                <tbody id="orderTableBody"><tr><td colspan="8" class="erp-table__empty">Loading…</td></tr></tbody>
+                            </table>
+                        </div>
+                        <div class="erp-pagination" id="orderPagination"></div>
+                    </div>
+                </section>
+            </div>
+            <div class="modal-overlay" id="orderModal" style="display:none">
+                <div class="modal modal--lg">
+                    <div class="modal__header"><h3>Create Order</h3><button class="modal__close" onclick="IBMS.erp.orders.hideForm()">&times;</button></div>
+                    <div class="modal__body">
+                        <div class="form-row"><label>Customer *</label><select id="orderCustomer" class="select--sm"><option value="">Select customer…</option></select></div>
+                        <div class="form-row">
+                            <label>Order Items</label>
+                            <div id="orderItemsList"></div>
+                            <button class="btn btn--sm" onclick="IBMS.erp.orders.addItemRow()" style="margin-top:var(--space-2)">+ Add Item</button>
+                        </div>
+                        <div class="form-grid-2">
+                            <div class="form-row"><label>Discount Amount</label><input type="number" id="orderDiscount" value="0" step="0.01" class="input--sm"></div>
+                            <div class="form-row"><label>Notes</label><input type="text" id="orderNotes" class="input--sm"></div>
+                        </div>
+                    </div>
+                    <div class="modal__footer"><button class="btn btn--primary" onclick="IBMS.erp.orders.save()">Create Order</button></div>
+                </div>
+            </div>
+        </main>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PAGE: INVOICES (ERP)
+             ═══════════════════════════════════════════════════════════ -->
+        <main class="dashboard" id="page-invoices" style="display:none">
+            <div class="dashboard__header">
+                <h1 class="dashboard__title">Invoice Management</h1>
+                <p class="dashboard__subtitle">Track invoices, payments, and receivables</p>
+            </div>
+            <div class="erp-stats" id="invoiceStats"></div>
+            <div class="panels">
+                <section class="panel panel--full">
+                    <div class="panel__header">
+                        <h2 class="panel__title">Invoices</h2>
+                        <div class="panel__actions">
+                            <select id="invoiceStatus" class="select--sm" onchange="IBMS.erp.invoices.load()">
+                                <option value="">All Status</option>
+                                <option value="draft">Draft</option>
+                                <option value="sent">Sent</option>
+                                <option value="paid">Paid</option>
+                                <option value="overdue">Overdue</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
+                            <button class="btn btn--primary btn--sm" onclick="IBMS.erp.invoices.showForm()">+ New Invoice</button>
+                        </div>
+                    </div>
+                    <div class="panel__body">
+                        <div class="erp-table-wrap">
+                            <table class="erp-table" id="invoiceTable">
+                                <thead><tr><th>Invoice #</th><th>Customer</th><th>Status</th><th>Subtotal</th><th>Tax</th><th>Total</th><th>Paid</th><th>Due Date</th><th>Actions</th></tr></thead>
+                                <tbody id="invoiceTableBody"><tr><td colspan="9" class="erp-table__empty">Loading…</td></tr></tbody>
+                            </table>
+                        </div>
+                        <div class="erp-pagination" id="invoicePagination"></div>
+                    </div>
+                </section>
+            </div>
+            <div class="modal-overlay" id="invoiceModal" style="display:none">
+                <div class="modal">
+                    <div class="modal__header"><h3>Create Invoice</h3><button class="modal__close" onclick="IBMS.erp.invoices.hideForm()">&times;</button></div>
+                    <div class="modal__body">
+                        <div class="form-row"><label>Customer *</label><select id="invoiceCustomer" class="select--sm"><option value="">Select customer…</option></select></div>
+                        <div class="form-row"><label>Order ID (optional)</label><input type="text" id="invoiceOrderId" class="input--sm"></div>
+                        <div class="form-row"><label>Due Date</label><input type="date" id="invoiceDueDate" class="input--sm"></div>
+                        <div class="form-grid-2">
+                            <div class="form-row"><label>Subtotal</label><input type="number" id="invoiceSubtotal" step="0.01" class="input--sm"></div>
+                            <div class="form-row"><label>Tax Amount</label><input type="number" id="invoiceTax" step="0.01" class="input--sm"></div>
+                        </div>
+                        <div class="form-row"><label>Total Amount</label><input type="number" id="invoiceTotal" step="0.01" class="input--sm"></div>
+                        <div class="form-row"><label>Notes</label><textarea id="invoiceNotes" class="input--sm" rows="2"></textarea></div>
+                    </div>
+                    <div class="modal__footer"><button class="btn btn--primary" onclick="IBMS.erp.invoices.save()">Create Invoice</button></div>
+                </div>
+            </div>
+        </main>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PAGE: INVENTORY (ERP)
+             ═══════════════════════════════════════════════════════════ -->
+        <main class="dashboard" id="page-inventory" style="display:none">
+            <div class="dashboard__header">
+                <h1 class="dashboard__title">Inventory Management</h1>
+                <p class="dashboard__subtitle">Track stock levels, movements, and reorder alerts</p>
+            </div>
+            <div class="panels">
+                <section class="panel">
+                    <div class="panel__header"><h2 class="panel__title">Low Stock Alerts</h2></div>
+                    <div class="panel__body">
+                        <div class="erp-table-wrap">
+                            <table class="erp-table">
+                                <thead><tr><th>SKU</th><th>Product</th><th>Stock</th><th>Reorder Level</th><th>Action</th></tr></thead>
+                                <tbody id="lowStockBody"><tr><td colspan="5" class="erp-table__empty">Loading…</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+                <section class="panel">
+                    <div class="panel__header"><h2 class="panel__title">Record Movement</h2></div>
+                    <div class="panel__body tool-form">
+                        <div class="form-row"><label>Product</label><select id="invProduct" class="select--sm"><option value="">Select…</option></select></div>
+                        <div class="form-row"><label>Type</label><select id="invType" class="select--sm"><option value="purchase">Purchase</option><option value="sale">Sale</option><option value="return">Return</option><option value="adjustment">Adjustment</option><option value="transfer">Transfer</option></select></div>
+                        <div class="form-row"><label>Quantity</label><input type="number" id="invQty" value="1" class="input--sm"></div>
+                        <div class="form-row"><label>Notes</label><input type="text" id="invNotes" class="input--sm"></div>
+                        <button class="btn btn--primary" onclick="IBMS.erp.inventory.recordMovement()">Record</button>
+                        <div class="result-box" id="invResult"></div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             PAGE: EMPLOYEES (ERP)
+             ═══════════════════════════════════════════════════════════ -->
+        <main class="dashboard" id="page-employees" style="display:none">
+            <div class="dashboard__header">
+                <h1 class="dashboard__title">HR & Employee Management</h1>
+                <p class="dashboard__subtitle">Manage workforce, departments, and payroll</p>
+            </div>
+            <div class="erp-stats" id="employeeStats"></div>
+            <div class="panels">
+                <section class="panel panel--full">
+                    <div class="panel__header">
+                        <h2 class="panel__title">Employees</h2>
+                        <div class="panel__actions">
+                            <input type="text" id="employeeSearch" placeholder="Search employees…" class="input--sm" onkeyup="IBMS.erp.employees.load()">
+                            <select id="employeeDept" class="select--sm" onchange="IBMS.erp.employees.load()">
+                                <option value="">All Departments</option>
+                                <option value="Engineering">Engineering</option>
+                                <option value="Sales">Sales</option>
+                                <option value="Marketing">Marketing</option>
+                                <option value="Finance">Finance</option>
+                                <option value="HR">HR</option>
+                                <option value="Operations">Operations</option>
+                            </select>
+                            <button class="btn btn--primary btn--sm" onclick="IBMS.erp.employees.showForm()">+ Add Employee</button>
+                        </div>
+                    </div>
+                    <div class="panel__body">
+                        <div class="erp-table-wrap">
+                            <table class="erp-table" id="employeeTable">
+                                <thead><tr><th>Code</th><th>Name</th><th>Email</th><th>Department</th><th>Position</th><th>Salary</th><th>Status</th><th>Actions</th></tr></thead>
+                                <tbody id="employeeTableBody"><tr><td colspan="8" class="erp-table__empty">Loading…</td></tr></tbody>
+                            </table>
+                        </div>
+                        <div class="erp-pagination" id="employeePagination"></div>
+                    </div>
+                </section>
+            </div>
+            <div class="modal-overlay" id="employeeModal" style="display:none">
+                <div class="modal">
+                    <div class="modal__header"><h3 id="employeeModalTitle">Add Employee</h3><button class="modal__close" onclick="IBMS.erp.employees.hideForm()">&times;</button></div>
+                    <div class="modal__body">
+                        <input type="hidden" id="employeeEditId">
+                        <div class="form-grid-2">
+                            <div class="form-row"><label>Employee Code *</label><input type="text" id="empCode" class="input--sm" required></div>
+                            <div class="form-row"><label>Email *</label><input type="email" id="empEmail" class="input--sm" required></div>
+                        </div>
+                        <div class="form-grid-2">
+                            <div class="form-row"><label>First Name *</label><input type="text" id="empFirstName" class="input--sm" required></div>
+                            <div class="form-row"><label>Last Name *</label><input type="text" id="empLastName" class="input--sm" required></div>
+                        </div>
+                        <div class="form-row"><label>Phone</label><input type="text" id="empPhone" class="input--sm"></div>
+                        <div class="form-grid-2">
+                            <div class="form-row"><label>Department</label><input type="text" id="empDept" class="input--sm"></div>
+                            <div class="form-row"><label>Position</label><input type="text" id="empPosition" class="input--sm"></div>
+                        </div>
+                        <div class="form-grid-2">
+                            <div class="form-row"><label>Salary</label><input type="number" id="empSalary" step="0.01" class="input--sm"></div>
+                            <div class="form-row"><label>Hire Date</label><input type="date" id="empHireDate" class="input--sm"></div>
+                        </div>
+                    </div>
+                    <div class="modal__footer"><button class="btn btn--primary" onclick="IBMS.erp.employees.save()">Save Employee</button></div>
+                </div>
             </div>
         </main>
 

@@ -11,3 +11,5 @@ bcrypt==4.2.1
 pyotp==2.9.0
 motor==3.7.0
 pymongo==4.11.3
+sqlalchemy[asyncio]==2.0.36
+aiomysql==0.2.0

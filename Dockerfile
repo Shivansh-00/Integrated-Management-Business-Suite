@@ -3,7 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install system deps
-RUN apt-get update && apt-get install -y --no-install-recommends curl && \
+RUN apt-get update && apt-get install -y --no-install-recommends curl default-libmysqlclient-dev gcc && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Python deps first (layer caching)

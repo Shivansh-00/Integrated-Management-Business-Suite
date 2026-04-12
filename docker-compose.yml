@@ -14,6 +14,24 @@ services:
       retries: 5
     restart: unless-stopped
 
+  mariadb:
+    image: mariadb:10.11
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=ibms_root_secret
+      - MYSQL_DATABASE=ibms_enterprise
+      - MYSQL_USER=ibms_user
+      - MYSQL_PASSWORD=ibms_secure_password
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   web:
     build: .
     ports:
@@ -22,6 +40,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - MONGO_URI=mongodb://mongodb:27017
       - MONGO_DB_NAME=ibms_enterprise
+      - MARIADB_URI=mysql+aiomysql://ibms_user:ibms_secure_password@mariadb:3306/ibms_enterprise
       - HOST=0.0.0.0
       - PORT=8000
       - RELOAD=false
@@ -29,6 +48,8 @@ services:
       redis:
         condition: service_healthy
       mongodb:
+        condition: service_healthy
+      mariadb:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -65,3 +86,4 @@ services:
 volumes:
   redis_data:
   mongo_data:
+  mariadb_data:

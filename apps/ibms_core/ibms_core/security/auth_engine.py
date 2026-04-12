@@ -43,7 +43,7 @@ except ImportError:
 def hash_password(password: str) -> str:
     """Hash password using bcrypt (preferred) or PBKDF2 fallback."""
     if _HAS_BCRYPT:
-        return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)).decode()
+        return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=10)).decode()
     # PBKDF2 fallback
     import hashlib
     salt = os.urandom(32)
@@ -481,6 +481,7 @@ def check_rate_limit(key: str) -> dict:
         return {"allowed": True, "attempts": 0, "remaining": MAX_LOGIN_ATTEMPTS}
     except Exception:
         # Fallback to in-memory
+        mark_sync_mongo_down()
         entry = _rate_limits_fallback[key]
         if entry.locked_until > now:
             remaining = int(entry.locked_until - now)
@@ -576,6 +577,7 @@ class User:
 # MongoDB-backed User Store
 # ---------------------------------------------------------------------------
 from ibms_core.database.models import UserOps, AuditOps, RefreshTokenOps, RateLimitOps, CSRFOps
+from ibms_core.database.connection import mark_sync_mongo_down
 
 # In-memory fallback caches (used only when MongoDB is unreachable)
 _users_fallback: dict[str, dict] = {}
@@ -630,6 +632,7 @@ def _init_default_users():
             )
     except Exception:
         # MongoDB not available yet — create in-memory fallback
+        mark_sync_mongo_down()
         if "admin" not in _user_by_username_fallback:
             admin_id = str(uuid.uuid4())
             _users_fallback[admin_id] = {

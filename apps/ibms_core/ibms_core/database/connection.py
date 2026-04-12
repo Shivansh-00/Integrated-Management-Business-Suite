@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time as _time
 from typing import Optional
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorCollection
@@ -35,6 +36,16 @@ _async_db: Optional[AsyncIOMotorDatabase] = None
 _sync_client: Optional[MongoClient] = None
 _sync_db: Optional[SyncDatabase] = None
 
+# Availability cache: skip sync MongoDB calls when known to be down
+_sync_mongo_available: bool = True
+_sync_mongo_last_fail: float = 0.0
+_SYNC_MONGO_COOLDOWN: float = 60.0  # seconds before retrying
+
+# Availability cache: skip async MongoDB calls when known to be down
+_async_mongo_available: bool = True
+_async_mongo_last_fail: float = 0.0
+_ASYNC_MONGO_COOLDOWN: float = 60.0
+
 
 # ===================================================================
 # ASYNC (Motor) — for FastAPI endpoints
@@ -48,8 +59,8 @@ async def connect_db() -> AsyncIOMotorDatabase:
         MONGO_URI,
         maxPoolSize=50,
         minPoolSize=5,
-        serverSelectionTimeoutMS=5000,
-        connectTimeoutMS=5000,
+        serverSelectionTimeoutMS=500,
+        connectTimeoutMS=500,
     )
     _async_db = _async_client[MONGO_DB_NAME]
 
@@ -96,8 +107,9 @@ def _ensure_sync_client():
         _sync_client = MongoClient(
             MONGO_URI,
             maxPoolSize=20,
-            serverSelectionTimeoutMS=5000,
-            connectTimeoutMS=5000,
+            serverSelectionTimeoutMS=2000,
+            connectTimeoutMS=2000,
+            socketTimeoutMS=5000,
         )
         _sync_db = _sync_client[MONGO_DB_NAME]
         logger.info("MongoDB sync connected: %s / %s", MONGO_URI, MONGO_DB_NAME)
@@ -109,8 +121,52 @@ def get_sync_db() -> SyncDatabase:
     return _sync_db
 
 
+def sync_mongo_is_available() -> bool:
+    """Return True if sync MongoDB is believed reachable (or cooldown expired)."""
+    global _sync_mongo_available, _sync_mongo_last_fail
+    if _sync_mongo_available:
+        return True
+    if (_time.time() - _sync_mongo_last_fail) >= _SYNC_MONGO_COOLDOWN:
+        _sync_mongo_available = True
+        logger.info("MongoDB sync cooldown expired — retrying")
+        return True
+    return False
+
+
+def mark_sync_mongo_down():
+    """Call after a sync MongoDB operation fails to enable the cooldown."""
+    global _sync_mongo_available, _sync_mongo_last_fail
+    if _sync_mongo_available:
+        logger.warning("Marking sync MongoDB as unavailable for %ss", _SYNC_MONGO_COOLDOWN)
+    _sync_mongo_available = False
+    _sync_mongo_last_fail = _time.time()
+
+
+def async_mongo_is_available() -> bool:
+    """Return True if async MongoDB is believed reachable (or cooldown expired)."""
+    global _async_mongo_available, _async_mongo_last_fail
+    if _async_mongo_available:
+        return True
+    if (_time.time() - _async_mongo_last_fail) >= _ASYNC_MONGO_COOLDOWN:
+        _async_mongo_available = True
+        logger.info("MongoDB async cooldown expired — retrying")
+        return True
+    return False
+
+
+def mark_async_mongo_down():
+    """Call after an async MongoDB operation fails to enable the cooldown."""
+    global _async_mongo_available, _async_mongo_last_fail
+    if _async_mongo_available:
+        logger.warning("Marking async MongoDB as unavailable for %ss", _ASYNC_MONGO_COOLDOWN)
+    _async_mongo_available = False
+    _async_mongo_last_fail = _time.time()
+
+
 def get_sync_collection(name: str) -> SyncCollection:
-    """Get a sync collection by name."""
+    """Get a sync collection by name. Raises if MongoDB is in cooldown."""
+    if not sync_mongo_is_available():
+        raise ConnectionError("MongoDB sync unavailable (cooldown)")
     return get_sync_db()[name]
 
 

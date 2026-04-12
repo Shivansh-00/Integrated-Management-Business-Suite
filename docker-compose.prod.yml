@@ -1,0 +1,88 @@
+# =============================================================================
+# IBMS Enterprise — Production Docker Compose (GCP VM / Docker Host)
+# =============================================================================
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# =============================================================================
+
+version: '3.9'
+
+services:
+  mongodb:
+    ports: []                              # No external port exposure in prod
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-ibms_admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?MONGO_PASSWORD is required}
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  mariadb:
+    ports: []                              # No external port exposure in prod
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      - MYSQL_DATABASE=ibms_enterprise
+      - MYSQL_USER=${MYSQL_USER:-ibms_user}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  web:
+    image: ${GCP_REGISTRY:-asia-south1-docker.pkg.dev/total-handler-463313-e2/ibms-docker}/ibms-web:${IMAGE_TAG:-latest}
+    build: {}                              # Disable build in prod — use pre-built image
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MONGO_URI=mongodb://${MONGO_USER:-ibms_admin}:${MONGO_PASSWORD}@mongodb:27017/?authSource=admin
+      - MONGO_DB_NAME=ibms_enterprise
+      - MARIADB_URI=mysql+aiomysql://${MYSQL_USER:-ibms_user}:${MYSQL_PASSWORD}@mariadb:3306/ibms_enterprise
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
+      - HOST=0.0.0.0
+      - PORT=8000
+      - RELOAD=false
+      - LOG_LEVEL=warning
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  nginx:
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/gcp/ssl:/etc/nginx/ssl:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  redis:
+    ports: []                              # No external port exposure in prod
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD:-}
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 256M

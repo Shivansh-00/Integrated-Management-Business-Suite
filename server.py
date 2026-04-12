@@ -97,7 +97,8 @@ from ibms_core.services.fraud_detection import detect_fraud, isolation_forest_sc
 from ibms_core.services.decision_engine import evaluate_document
 from ibms_core.monitoring.metrics import inc_requests, snapshot
 from ibms_core.monitoring.tracing import start_trace
-from ibms_core.database.connection import connect_db, close_db, get_db
+from ibms_core.database.connection import connect_db, close_db, get_db, async_mongo_is_available, mark_async_mongo_down
+from ibms_core.database.mariadb_connection import connect_mariadb, close_mariadb
 from ibms_core.database.models import (
     KPIOps,
     NotificationOps,
@@ -105,6 +106,15 @@ from ibms_core.database.models import (
     AlertOps,
     WebhookLogOps,
     ProfileOps,
+)
+from ibms_core.database.mariadb_ops import (
+    CustomerOps,
+    ProductOps,
+    OrderOps,
+    InvoiceOps,
+    EmployeeOps,
+    InventoryMovementOps,
+    ERPSummaryOps,
 )
 
 load_dotenv()
@@ -241,13 +251,15 @@ async def push_notification(title: str, message: str, level: str = "info", targe
     _notifications.append(notif)
     if len(_notifications) > 500:
         _notifications.pop(0)
-    # Persist to MongoDB
-    try:
-        await NotificationOps.create(
-            title=title, message=message, level=level, target_user=target_user,
-        )
-    except Exception as exc:
-        logger.warning("MongoDB notification save failed: %s", exc)
+    # Persist to MongoDB (skip if async MongoDB in cooldown)
+    if async_mongo_is_available():
+        try:
+            await NotificationOps.create(
+                title=title, message=message, level=level, target_user=target_user,
+            )
+        except Exception as exc:
+            mark_async_mongo_down()
+            logger.warning("MongoDB notification save failed: %s", exc)
     payload = {"type": "notification", "payload": notif}
     if target_user:
         await ws_manager.send_personal(target_user, payload)
@@ -329,7 +341,14 @@ async def lifespan(app: FastAPI):
         await connect_db()
         logger.info("MongoDB connected successfully")
     except Exception as exc:
+        mark_async_mongo_down()
         logger.error("MongoDB connection failed: %s — falling back to in-memory", exc)
+    # Connect MariaDB
+    try:
+        await connect_mariadb()
+        logger.info("MariaDB connected successfully")
+    except Exception as exc:
+        logger.error("MariaDB connection failed: %s", exc)
     await get_redis()
     await refresh_kpis()
     task = asyncio.create_task(_scheduler_loop())
@@ -337,6 +356,8 @@ async def lifespan(app: FastAPI):
     global _scheduler_running
     _scheduler_running = False
     task.cancel()
+    # Close MariaDB
+    await close_mariadb()
     # Close MongoDB
     await close_db()
     r = await get_redis()
@@ -363,8 +384,19 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Trace-Id", "X-Response-Time-Ms", "X-CSRF-Token", "X-RateLimit-Remaining"],
+    expose_headers=["X-Trace-Id", "X-Response-Time-Ms", "X-CSRF-Token", "X-RateLimit-Remaining", "X-Process-Time"],
 )
+
+
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    """Add X-Process-Time header to all responses for performance monitoring."""
+    import time as _time
+    start = _time.perf_counter()
+    response = await call_next(request)
+    process_time = _time.perf_counter() - start
+    response.headers["X-Process-Time"] = f"{process_time:.3f}"
+    return response
 
 # ---------------------------------------------------------------------------
 # Serve static frontend
@@ -575,7 +607,7 @@ async def login(req: LoginRequest, request: Request, response: Response):
     device_fp = req.device_fingerprint or compute_device_fingerprint(
         request.headers.get("user-agent", ""), request.headers.get("accept-language", ""), client_ip,
     )
-    result = authenticate(username=req.username, password=req.password, jwt_secret=JWT_SECRET, ip=client_ip, device_fp=device_fp, totp_code=req.totp_code)
+    result = await asyncio.to_thread(authenticate, username=req.username, password=req.password, jwt_secret=JWT_SECRET, ip=client_ip, device_fp=device_fp, totp_code=req.totp_code)
     if not result.success:
         if result.requires_2fa:
             return api_response({"requires_2fa": True, "user_id": result.user_id}, message="2FA code required", status_code=200)
@@ -586,7 +618,8 @@ async def login(req: LoginRequest, request: Request, response: Response):
     })
     resp.set_cookie(key="ibms_access_token", value=result.access_token, httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=ACCESS_TOKEN_TTL, path="/")
     resp.set_cookie(key="ibms_refresh_token", value=result.refresh_token, httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=REFRESH_TOKEN_TTL, path="/api/auth/refresh")
-    await push_notification("Login Successful", f"User {req.username} logged in", "info", result.user_id)
+    # Fire-and-forget: don't block login response on notification persistence
+    asyncio.create_task(push_notification("Login Successful", f"User {req.username} logged in", "info", result.user_id))
     return resp
 
 
@@ -705,17 +738,30 @@ async def audit_log_endpoint(limit: int = 100, event_type: str = "", user: dict 
 async def health():
     r = await get_redis()
     uptime = round(time.time() - _server_start_time, 1)
-    # Check MongoDB
+    # Check MongoDB (with async cooldown)
     mongo_ok = False
+    if async_mongo_is_available():
+        try:
+            db = get_db()
+            await db.client.admin.command("ping")
+            mongo_ok = True
+        except Exception:
+            mark_async_mongo_down()
+    # Check MariaDB
+    mariadb_ok = False
     try:
-        db = get_db()
-        await db.client.admin.command("ping")
-        mongo_ok = True
+        from ibms_core.database.mariadb_connection import get_engine
+        engine = get_engine()
+        if engine:
+            from sqlalchemy import text
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+            mariadb_ok = True
     except Exception:
         pass
     return {
-        "status": "healthy", "version": "2.0.0", "redis": r is not None,
-        "mongodb": mongo_ok,
+        "status": "healthy", "version": "2.0.5", "redis": r is not None,
+        "mongodb": mongo_ok, "mariadb": mariadb_ok,
         "uptime_seconds": uptime, "uptime_human": f"{int(uptime // 3600)}h {int((uptime % 3600) // 60)}m",
         "total_requests": _request_count, "total_errors": _error_count,
         "error_rate": round((_error_count / max(_request_count, 1)) * 100, 2),
@@ -729,23 +775,81 @@ async def metrics():
     return api_response({"counters": snapshot(), "uptime": round(time.time() - _server_start_time, 1), "requests": _request_count, "errors": _error_count, "ws_connections": len(ws_manager.active)})
 
 
+@app.get("/api/debug/auth-bench")
+async def auth_bench():
+    """Benchmark each step of the auth pipeline individually."""
+    import time as _t
+    results = {}
+
+    # 1. Sync MongoDB call (rate limit check)
+    s = _t.perf_counter()
+    try:
+        check_rate_limit("bench:test")
+    except Exception:
+        pass
+    results["mongo_sync_ms"] = round((_t.perf_counter() - s) * 1000, 1)
+
+    # 2. bcrypt hash
+    s = _t.perf_counter()
+    from ibms_core.security.auth_engine import hash_password
+    _h = hash_password("BenchmarkTest123!")
+    results["bcrypt_hash_ms"] = round((_t.perf_counter() - s) * 1000, 1)
+
+    # 3. bcrypt verify
+    s = _t.perf_counter()
+    from ibms_core.security.auth_engine import verify_password
+    verify_password("BenchmarkTest123!", _h)
+    results["bcrypt_verify_ms"] = round((_t.perf_counter() - s) * 1000, 1)
+
+    # 4. Async MongoDB (with cooldown)
+    s = _t.perf_counter()
+    if async_mongo_is_available():
+        try:
+            db = get_db()
+            await db.client.admin.command("ping")
+        except Exception:
+            mark_async_mongo_down()
+    results["mongo_async_ms"] = round((_t.perf_counter() - s) * 1000, 1)
+
+    # 5. JWT create
+    s = _t.perf_counter()
+    from ibms_core.security.auth_engine import create_jwt, TokenType
+    create_jwt({"sub": "bench", "role": "test"}, JWT_SECRET, TokenType.ACCESS, ttl=60)
+    results["jwt_create_ms"] = round((_t.perf_counter() - s) * 1000, 1)
+
+    return results
+
+
 @app.get("/api/system/status")
 async def system_status():
     r = await get_redis()
     uptime = time.time() - _server_start_time
     top_endpoints = sorted(_endpoint_stats.items(), key=lambda x: x[1]["count"], reverse=True)[:10]
-    # Check MongoDB
+    # Check MongoDB (with async cooldown)
     mongo_ok = False
+    if async_mongo_is_available():
+        try:
+            db = get_db()
+            await db.client.admin.command("ping")
+            mongo_ok = True
+        except Exception:
+            mark_async_mongo_down()
+    # Check MariaDB
+    mariadb_ok = False
     try:
-        db = get_db()
-        await db.client.admin.command("ping")
-        mongo_ok = True
+        from ibms_core.database.mariadb_connection import get_engine
+        engine = get_engine()
+        if engine:
+            from sqlalchemy import text
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+            mariadb_ok = True
     except Exception:
         pass
     return api_response({
-        "server": {"status": "healthy", "version": "2.0.0", "uptime_seconds": round(uptime, 1), "uptime_human": f"{int(uptime // 3600)}h {int((uptime % 3600) // 60)}m {int(uptime % 60)}s"},
+        "server": {"status": "healthy", "version": "2.0.5", "uptime_seconds": round(uptime, 1), "uptime_human": f"{int(uptime // 3600)}h {int((uptime % 3600) // 60)}m {int(uptime % 60)}s"},
         "performance": {"total_requests": _request_count, "total_errors": _error_count, "error_rate_pct": round((_error_count / max(_request_count, 1)) * 100, 2), "ws_connections": len(ws_manager.active)},
-        "infrastructure": {"redis": {"connected": r is not None}, "mongodb": {"connected": mongo_ok}, "cache": {"type": "redis" if r else "in-memory", "entries": len(_mem_cache)}},
+        "infrastructure": {"redis": {"connected": r is not None}, "mongodb": {"connected": mongo_ok}, "mariadb": {"connected": mariadb_ok}, "cache": {"type": "redis" if r else "in-memory", "entries": len(_mem_cache)}},
         "top_endpoints": [{"path": path, "requests": stats["count"], "avg_ms": round(stats["total_ms"] / max(stats["count"], 1), 2)} for path, stats in top_endpoints],
     })
 
@@ -940,6 +1044,424 @@ async def list_endpoints():
         if hasattr(route, "methods") and hasattr(route, "path"):
             routes.append({"path": route.path, "methods": list(route.methods - {"HEAD", "OPTIONS"})})
     return {"endpoints": sorted(routes, key=lambda r: r["path"])}
+
+
+# ===================================================================
+# ERP — CUSTOMERS
+# ===================================================================
+class CustomerCreateRequest(BaseModel):
+    name: str
+    email: str = ""
+    phone: str = ""
+    company: str = ""
+    segment: str = "sme"
+    credit_limit: float = 50000.0
+    address: str = ""
+    city: str = ""
+    country: str = ""
+
+
+class CustomerUpdateRequest(BaseModel):
+    name: str = ""
+    email: str = ""
+    phone: str = ""
+    company: str = ""
+    segment: str = ""
+    credit_limit: float = None
+    address: str = ""
+    city: str = ""
+    country: str = ""
+    is_active: bool = None
+
+
+@app.get("/api/erp/customers")
+async def list_customers(
+    limit: int = 50, offset: int = 0,
+    segment: str = "", search: str = "",
+    user: dict = Depends(require_auth),
+):
+    try:
+        result = await CustomerOps.list_all(limit=limit, offset=offset, segment=segment, search=search)
+        return api_response(result)
+    except Exception as exc:
+        logger.error("Customer list error: %s", exc)
+        return error_response(str(exc), 500)
+
+
+@app.get("/api/erp/customers/stats")
+async def customer_stats(user: dict = Depends(require_auth)):
+    try:
+        return api_response(await CustomerOps.get_stats())
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+
+@app.get("/api/erp/customers/{customer_id}")
+async def get_customer(customer_id: str, user: dict = Depends(require_auth)):
+    result = await CustomerOps.get_by_id(customer_id)
+    if not result:
+        return error_response("Customer not found", 404)
+    return api_response(result)
+
+
+@app.post("/api/erp/customers")
+async def create_customer(req: CustomerCreateRequest, user: dict = Depends(require_auth)):
+    try:
+        data = req.model_dump(exclude_unset=True)
+        result = await CustomerOps.create(data)
+        return api_response(result)
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+
+@app.put("/api/erp/customers/{customer_id}")
+async def update_customer(customer_id: str, req: CustomerUpdateRequest, user: dict = Depends(require_auth)):
+    data = {k: v for k, v in req.model_dump(exclude_unset=True).items() if v is not None and v != ""}
+    result = await CustomerOps.update(customer_id, data)
+    if not result:
+        return error_response("Customer not found", 404)
+    return api_response(result)
+
+
+@app.delete("/api/erp/customers/{customer_id}")
+async def delete_customer(customer_id: str, user: dict = Depends(require_auth)):
+    ok = await CustomerOps.delete(customer_id)
+    if not ok:
+        return error_response("Customer not found", 404)
+    return api_response({"deleted": True})
+
+
+# ===================================================================
+# ERP — PRODUCTS
+# ===================================================================
+class ProductCreateRequest(BaseModel):
+    name: str
+    sku: str
+    category: str = ""
+    unit_price: float = 0
+    cost_price: float = 0
+    tax_rate: float = 0
+    stock_quantity: int = 0
+    reorder_level: int = 10
+    description: str = ""
+
+
+class ProductUpdateRequest(BaseModel):
+    name: str = ""
+    category: str = ""
+    unit_price: float = None
+    cost_price: float = None
+    tax_rate: float = None
+    stock_quantity: int = None
+    reorder_level: int = None
+    description: str = ""
+    is_active: bool = None
+
+
+@app.get("/api/erp/products")
+async def list_products(
+    limit: int = 50, offset: int = 0,
+    category: str = "", search: str = "",
+    user: dict = Depends(require_auth),
+):
+    try:
+        result = await ProductOps.list_all(limit=limit, offset=offset, category=category, search=search)
+        return api_response(result)
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+
+@app.get("/api/erp/products/stats")
+async def product_stats(user: dict = Depends(require_auth)):
+    try:
+        return api_response(await ProductOps.get_stats())
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+
+@app.get("/api/erp/products/low-stock")
+async def low_stock_products(threshold: int = 0, user: dict = Depends(require_auth)):
+    try:
+        return api_response(await ProductOps.get_low_stock(threshold))
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+
+@app.get("/api/erp/products/{product_id}")
+async def get_product(product_id: str, user: dict = Depends(require_auth)):
+    result = await ProductOps.get_by_id(product_id)
+    if not result:
+        return error_response("Product not found", 404)
+    return api_response(result)
+
+
+@app.post("/api/erp/products")
+async def create_product(req: ProductCreateRequest, user: dict = Depends(require_auth)):
+    try:
+        data = req.model_dump(exclude_unset=True)
+        result = await ProductOps.create(data)
+        return api_response(result)
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+
+@app.put("/api/erp/products/{product_id}")
+async def update_product(product_id: str, req: ProductUpdateRequest, user: dict = Depends(require_auth)):
+    data = {k: v for k, v in req.model_dump(exclude_unset=True).items() if v is not None and v != ""}
+    result = await ProductOps.update(product_id, data)
+    if not result:
+        return error_response("Product not found", 404)
+    return api_response(result)
+
+
+@app.delete("/api/erp/products/{product_id}")
+async def delete_product(product_id: str, user: dict = Depends(require_auth)):
+    ok = await ProductOps.delete(product_id)
+    if not ok:
+        return error_response("Product not found", 404)
+    return api_response({"deleted": True})
+
+
+# ===================================================================
+# ERP — ORDERS
+# ===================================================================
+class OrderItemInput(BaseModel):
+    product_id: str
+    quantity: int = 1
+    discount_pct: float = 0
+
+
+class OrderCreateRequest(BaseModel):
+    customer_id: str
+    items: list[OrderItemInput]
+    discount_amount: float = 0
+    notes: str = ""
+
+
+@app.get("/api/erp/orders")
+async def list_orders(
+    limit: int = 50, offset: int = 0,
+    status: str = "", customer_id: str = "",
+    user: dict = Depends(require_auth),
+):
+    try:
+        result = await OrderOps.list_all(limit=limit, offset=offset, status=status, customer_id=customer_id)
+        return api_response(result)
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+
+@app.get("/api/erp/orders/stats")
+async def order_stats(user: dict = Depends(require_auth)):
+    try:
+        return api_response(await OrderOps.get_stats())
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+
+@app.get("/api/erp/orders/{order_id}")
+async def get_order(order_id: str, user: dict = Depends(require_auth)):
+    result = await OrderOps.get_by_id(order_id)
+    if not result:
+        return error_response("Order not found", 404)
+    return api_response(result)
+
+
+@app.post("/api/erp/orders")
+async def create_order(req: OrderCreateRequest, user: dict = Depends(require_auth)):
+    try:
+        order_data = {"customer_id": req.customer_id, "discount_amount": req.discount_amount, "notes": req.notes}
+        items_data = [item.model_dump() for item in req.items]
+        result = await OrderOps.create(order_data, items_data)
+        return api_response(result)
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+
+@app.put("/api/erp/orders/{order_id}/status")
+async def update_order_status(order_id: str, new_status: str, user: dict = Depends(require_auth)):
+    result = await OrderOps.update_status(order_id, new_status)
+    if not result:
+        return error_response("Order not found", 404)
+    return api_response(result)
+
+
+# ===================================================================
+# ERP — INVOICES
+# ===================================================================
+class InvoiceCreateRequest(BaseModel):
+    customer_id: str
+    order_id: str = ""
+    due_date: str = ""
+    subtotal: float = 0
+    tax_amount: float = 0
+    total_amount: float = 0
+    notes: str = ""
+
+
+@app.get("/api/erp/invoices")
+async def list_invoices(
+    limit: int = 50, offset: int = 0,
+    status: str = "", customer_id: str = "",
+    user: dict = Depends(require_auth),
+):
+    try:
+        result = await InvoiceOps.list_all(limit=limit, offset=offset, status=status, customer_id=customer_id)
+        return api_response(result)
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+
+@app.get("/api/erp/invoices/stats")
+async def invoice_stats(user: dict = Depends(require_auth)):
+    try:
+        return api_response(await InvoiceOps.get_stats())
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+
+@app.get("/api/erp/invoices/{invoice_id}")
+async def get_invoice(invoice_id: str, user: dict = Depends(require_auth)):
+    result = await InvoiceOps.get_by_id(invoice_id)
+    if not result:
+        return error_response("Invoice not found", 404)
+    return api_response(result)
+
+
+@app.post("/api/erp/invoices")
+async def create_invoice(req: InvoiceCreateRequest, user: dict = Depends(require_auth)):
+    try:
+        data = req.model_dump(exclude_unset=True)
+        result = await InvoiceOps.create(data)
+        return api_response(result)
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+
+@app.put("/api/erp/invoices/{invoice_id}/status")
+async def update_invoice_status(invoice_id: str, new_status: str, paid_amount: float = None, user: dict = Depends(require_auth)):
+    result = await InvoiceOps.update_status(invoice_id, new_status, paid_amount)
+    if not result:
+        return error_response("Invoice not found", 404)
+    return api_response(result)
+
+
+# ===================================================================
+# ERP — EMPLOYEES
+# ===================================================================
+class EmployeeCreateRequest(BaseModel):
+    employee_code: str
+    first_name: str
+    last_name: str
+    email: str
+    phone: str = ""
+    department: str = ""
+    position: str = ""
+    salary: float = 0
+    hire_date: str = ""
+
+
+class EmployeeUpdateRequest(BaseModel):
+    first_name: str = ""
+    last_name: str = ""
+    email: str = ""
+    phone: str = ""
+    department: str = ""
+    position: str = ""
+    salary: float = None
+    is_active: bool = None
+
+
+@app.get("/api/erp/employees")
+async def list_employees(
+    limit: int = 50, offset: int = 0,
+    department: str = "", search: str = "",
+    user: dict = Depends(require_auth),
+):
+    try:
+        result = await EmployeeOps.list_all(limit=limit, offset=offset, department=department, search=search)
+        return api_response(result)
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+
+@app.get("/api/erp/employees/stats")
+async def employee_stats(user: dict = Depends(require_auth)):
+    try:
+        return api_response(await EmployeeOps.get_stats())
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+
+@app.get("/api/erp/employees/{emp_id}")
+async def get_employee(emp_id: str, user: dict = Depends(require_auth)):
+    result = await EmployeeOps.get_by_id(emp_id)
+    if not result:
+        return error_response("Employee not found", 404)
+    return api_response(result)
+
+
+@app.post("/api/erp/employees")
+async def create_employee(req: EmployeeCreateRequest, user: dict = Depends(require_auth)):
+    try:
+        data = req.model_dump(exclude_unset=True)
+        result = await EmployeeOps.create(data)
+        return api_response(result)
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+
+@app.put("/api/erp/employees/{emp_id}")
+async def update_employee(emp_id: str, req: EmployeeUpdateRequest, user: dict = Depends(require_auth)):
+    data = {k: v for k, v in req.model_dump(exclude_unset=True).items() if v is not None and v != ""}
+    result = await EmployeeOps.update(emp_id, data)
+    if not result:
+        return error_response("Employee not found", 404)
+    return api_response(result)
+
+
+# ===================================================================
+# ERP — INVENTORY
+# ===================================================================
+class InventoryMovementRequest(BaseModel):
+    product_id: str
+    movement_type: str
+    quantity: int
+    reference_type: str = ""
+    reference_id: str = ""
+    notes: str = ""
+
+
+@app.post("/api/erp/inventory/movement")
+async def record_inventory_movement(req: InventoryMovementRequest, user: dict = Depends(require_auth)):
+    try:
+        result = await InventoryMovementOps.record(
+            product_id=req.product_id, movement_type=req.movement_type,
+            quantity=req.quantity, reference_type=req.reference_type or None,
+            reference_id=req.reference_id or None, notes=req.notes or None,
+        )
+        return api_response(result)
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+
+@app.get("/api/erp/inventory/movements/{product_id}")
+async def get_inventory_movements(product_id: str, limit: int = 50, user: dict = Depends(require_auth)):
+    try:
+        return api_response(await InventoryMovementOps.get_by_product(product_id, limit))
+    except Exception as exc:
+        return error_response(str(exc), 500)
+
+
+# ===================================================================
+# ERP — OVERVIEW / SUMMARY
+# ===================================================================
+@app.get("/api/erp/overview")
+async def erp_overview(user: dict = Depends(require_auth)):
+    try:
+        return api_response(await ERPSummaryOps.get_overview())
+    except Exception as exc:
+        return error_response(str(exc), 500)
 
 
 # ===================================================================
