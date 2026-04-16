@@ -1,0 +1,52 @@
+# =============================================================================
+# IBMS Enterprise — Render.com Blueprint (Infrastructure as Code)
+# Deploy: https://render.com/deploy → select this repo
+# =============================================================================
+
+services:
+  # ── Web Service (FastAPI + Docker) ──────────────────────────────────────
+  - type: web
+    name: ibms-enterprise
+    runtime: docker
+    repo: https://github.com/Shivansh-00/Integrated-Management-Business-Suite
+    branch: main
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      # Supabase — set these in the Render dashboard
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+
+      # Auth — auto-generated 256-bit secret
+      - key: JWT_SECRET
+        generateValue: true
+
+      # AI Copilot — set in dashboard
+      - key: GROQ_API_KEY
+        sync: false
+
+      # Redis — auto-wired from the Redis instance below
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: ibms-redis
+          property: connectionString
+
+      # Production defaults
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      - key: RELOAD
+        value: "false"
+      - key: HOST
+        value: "0.0.0.0"
+
+  # ── Redis Cache (free 25 MB) ────────────────────────────────────────────
+  - type: redis
+    name: ibms-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []   # internal connections only
