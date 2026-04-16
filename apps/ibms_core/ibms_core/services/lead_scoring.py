@@ -1,4 +1,3 @@
-import frappe
 
 
 def score_lead(lead_name: str, features: dict | None = None):

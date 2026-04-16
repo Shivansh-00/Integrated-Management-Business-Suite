@@ -6,7 +6,6 @@ from frappe import _
 
 from ibms_core.security.jwt_auth import decode_token, issue_token
 
-
 ACCESS_TTL_SECONDS = 1800
 REFRESH_TTL_SECONDS = 604800
 RATE_LIMIT_WINDOW_SECONDS = 60

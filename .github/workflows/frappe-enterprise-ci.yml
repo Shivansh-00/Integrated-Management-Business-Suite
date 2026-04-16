@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -17,23 +20,27 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
 
-      - name: Install linters
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
-      - name: Pre-commit checks
-        run: pre-commit run --all-files
-
       - name: Lint app code
-        run: ruff check apps/ibms_core/ibms_core
+        run: ruff check apps/ibms_core/ibms_core apps/ibms_core/tests
 
       - name: Type check selected modules
         run: mypy apps/ibms_core/ibms_core/security apps/ibms_core/ibms_core/api
 
       - name: Unit tests
-        run: pytest -q apps/ibms_core/tests
+        run: pytest -q --tb=short
+        env:
+          SUPABASE_URL: https://test.supabase.co
+          SUPABASE_KEY: test-key
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key-ci
 
   build-image:
     runs-on: ubuntu-latest

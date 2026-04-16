@@ -1,6 +1,5 @@
 import time
 
-
 _METRICS = {"requests_total": 0, "last_refresh_ts": 0}
 
 

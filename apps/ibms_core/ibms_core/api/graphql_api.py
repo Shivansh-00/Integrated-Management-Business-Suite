@@ -3,7 +3,6 @@ from typing import Any
 
 import frappe
 
-
 SCHEMA_SDL = """
 type KPISnapshot {
   name: String!

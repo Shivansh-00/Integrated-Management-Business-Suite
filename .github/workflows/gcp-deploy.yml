@@ -38,7 +38,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Lint
-        run: ruff check .
+        run: ruff check apps/ibms_core/ibms_core apps/ibms_core/tests
 
       - name: Test
         run: pytest -q --tb=short

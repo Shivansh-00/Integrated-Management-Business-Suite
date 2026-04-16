@@ -1,6 +1,5 @@
 import frappe
 
-
 FEATURE_CACHE_KEY = "ibms:inventory:features"
 
 

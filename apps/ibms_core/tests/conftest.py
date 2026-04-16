@@ -2,7 +2,6 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-
 ROOT = Path(__file__).resolve().parents[3]
 APP_PATH = ROOT / "apps" / "ibms_core"
 if str(APP_PATH) not in sys.path:

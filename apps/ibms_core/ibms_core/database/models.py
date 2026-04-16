@@ -8,13 +8,10 @@ Uses Supabase PostgREST client (replaces MongoDB).
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Optional
 
-from ibms_core.database.supabase_connection import get_supabase_sync, get_supabase_async
-
+from ibms_core.database.supabase_connection import get_supabase_async, get_supabase_sync
 
 # ===================================================================
 # HELPERS

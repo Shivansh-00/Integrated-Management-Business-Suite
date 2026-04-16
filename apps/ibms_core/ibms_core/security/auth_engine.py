@@ -22,13 +22,11 @@ import re
 import secrets
 import time
 import uuid
-from base64 import b64encode, b64decode
+from base64 import b64decode, b64encode
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
-
 
 # ---------------------------------------------------------------------------
 # Password Hashing (bcrypt-compatible with fallback)
@@ -149,9 +147,9 @@ def verify_totp(secret: str, code: str, window: int = 1) -> bool:
         return totp.verify(code, valid_window=window)
     except ImportError:
         # Manual TOTP verification
-        import struct
-        import hmac as _hmac
         import hashlib as _hashlib
+        import hmac as _hmac
+        import struct
 
         def _generate_totp(secret_bytes: bytes, time_step: int) -> str:
             msg = struct.pack(">Q", time_step)
@@ -579,8 +577,14 @@ class User:
 # ---------------------------------------------------------------------------
 # Supabase-backed User Store
 # ---------------------------------------------------------------------------
-from ibms_core.database.models import UserOps, AuditOps, RefreshTokenOps, RateLimitOps, CSRFOps
-from ibms_core.database.supabase_connection import mark_sync_supabase_down
+from ibms_core.database.models import (  # noqa: E402
+    AuditOps,
+    CSRFOps,
+    RateLimitOps,
+    RefreshTokenOps,
+    UserOps,
+)
+from ibms_core.database.supabase_connection import mark_sync_supabase_down  # noqa: E402
 
 # In-memory fallback caches (used only when Supabase is unreachable)
 _users_fallback: dict[str, dict] = {}

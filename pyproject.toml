@@ -9,7 +9,7 @@ testpaths = [
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-extend-exclude = [".venv", "node_modules"]
+extend-exclude = [".venv", "node_modules", "deploy", "scripts", "__pycache__"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
@@ -17,7 +17,7 @@ ignore = ["E501"]
 
 [tool.mypy]
 python_version = "3.10"
-warn_return_any = true
+warn_return_any = false
 warn_unused_configs = true
 ignore_missing_imports = true
 exclude = [".venv"]

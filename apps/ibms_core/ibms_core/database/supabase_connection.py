@@ -11,10 +11,8 @@ from __future__ import annotations
 import logging
 import os
 import time as _time
-from typing import Optional
 
-from supabase import create_client, Client
-from supabase import acreate_client, AsyncClient
+from supabase import AsyncClient, Client, acreate_client, create_client
 
 logger = logging.getLogger("ibms.supabase")
 
@@ -27,12 +25,12 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 # ---------------------------------------------------------------------------
 # Async client — used by FastAPI / server.py
 # ---------------------------------------------------------------------------
-_async_client: Optional[AsyncClient] = None
+_async_client: AsyncClient | None = None
 
 # ---------------------------------------------------------------------------
 # Sync client — used by auth_engine, jobs, etc.
 # ---------------------------------------------------------------------------
-_sync_client: Optional[Client] = None
+_sync_client: Client | None = None
 
 # Availability cache: skip sync calls when known to be down
 _sync_available: bool = True
@@ -92,6 +90,7 @@ def _ensure_sync_client():
 def get_supabase_sync() -> Client:
     """Get the sync Supabase client instance."""
     _ensure_sync_client()
+    assert _sync_client is not None
     return _sync_client
 
 

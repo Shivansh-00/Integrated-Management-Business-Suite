@@ -11,13 +11,13 @@ _remap_from_db / _remap_to_db helpers handle the translation transparently.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
 from ibms_core.database.supabase_connection import get_supabase_async
 
-import logging
 _logger = logging.getLogger("ibms.supabase_ops")
 
 # In-memory fallback stores (used when Supabase is unavailable)

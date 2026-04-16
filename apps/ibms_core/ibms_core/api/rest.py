@@ -4,7 +4,6 @@ from typing import Any
 import frappe
 from frappe import _
 
-
 ALLOWED_DOCTYPES = {
     "Enterprise Profile",
     "Smart Decision Rule",
