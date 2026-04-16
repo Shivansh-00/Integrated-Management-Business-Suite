@@ -83,7 +83,7 @@ jobs:
           image: ${{ env.IMAGE }}:${{ github.sha }}
           env_vars: |
             HOST=0.0.0.0
-            PORT=8000
+            PORT=8080
             RELOAD=false
             LOG_LEVEL=warning
           secrets: |
