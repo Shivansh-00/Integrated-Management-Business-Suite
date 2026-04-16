@@ -1,6 +1,6 @@
-"""Link billing and enable APIs for ibms-enterprise - saves output to file."""
-import http.server, urllib.parse, secrets, hashlib, base64, webbrowser, sys, time
-import httpx
+"""Link billing and enable APIs for IBMS Cloud Run project - saves output to file."""
+import http.server, urllib.parse, secrets, hashlib, base64, webbrowser, sys, time, os
+import requests
 
 LOG = open("deploy/gcp/_setup_log.txt", "w", encoding="utf-8")
 def log(msg):
@@ -12,7 +12,7 @@ CLIENT_ID = "764086051850-6qr4p6gpi6hn506pt8ejuq83di341hur.apps.googleuserconten
 CLIENT_SECRET = "d-FL95Q19q7MQmFpd7hHD0Ty"
 REDIRECT_URI = "http://localhost:8089"
 SCOPES = "https://www.googleapis.com/auth/cloud-platform"
-PROJECT_ID = "ibms-enterprise"
+PROJECT_ID = os.getenv("GCP_PROJECT_ID", "total-handler-463313-e2")
 BILLING_ACCOUNT = "billingAccounts/016241-B8D40A-3102D2"
 
 code_verifier = secrets.token_urlsafe(64)
@@ -50,29 +50,28 @@ s.server_close()
 if not auth_code:
     log("Auth failed"); sys.exit(1)
 
-r = httpx.post("https://oauth2.googleapis.com/token", data={
+r = requests.post("https://oauth2.googleapis.com/token", data={
     "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET,
     "code": auth_code, "grant_type": "authorization_code",
     "redirect_uri": REDIRECT_URI, "code_verifier": code_verifier,
-})
+}, timeout=30)
 token = r.json()["access_token"]
 log("[OK] Authenticated")
-c = httpx.Client(timeout=60)
 h = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 # 1. Link billing
 log("\n=== Linking billing ===")
-r1 = c.put(
+r1 = requests.put(
     f"https://cloudbilling.googleapis.com/v1/projects/{PROJECT_ID}/billingInfo",
     headers=h,
-    json={"billingAccountName": BILLING_ACCOUNT})
+    json={"billingAccountName": BILLING_ACCOUNT}, timeout=30)
 log(f"Status: {r1.status_code}")
 log(f"Response: {r1.text[:500]}")
 
 # 2. Verify
 log("\n=== Verify billing ===")
-r2 = c.get(f"https://cloudbilling.googleapis.com/v1/projects/{PROJECT_ID}/billingInfo",
-           headers={"Authorization": f"Bearer {token}"})
+r2 = requests.get(f"https://cloudbilling.googleapis.com/v1/projects/{PROJECT_ID}/billingInfo",
+           headers={"Authorization": f"Bearer {token}"}, timeout=30)
 log(f"Billing enabled: {r2.json().get('billingEnabled')}")
 
 # 3. Enable APIs needed for deployment
@@ -92,9 +91,9 @@ apis = [
 ]
 for api in apis:
     try:
-        r3 = c.post(
+        r3 = requests.post(
             f"https://serviceusage.googleapis.com/v1/projects/{PROJECT_ID}/services/{api}:enable",
-            headers=h)
+            headers=h, timeout=60)
         if r3.status_code == 200:
             log(f"  [OK] {api}")
         else:
