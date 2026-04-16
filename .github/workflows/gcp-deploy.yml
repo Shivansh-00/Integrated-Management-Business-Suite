@@ -42,8 +42,8 @@ jobs:
       - name: Test
         run: pytest tests/ -q --tb=short
         env:
-          MONGO_URI: mongodb://localhost:27017
-          MARIADB_URI: sqlite+aiosqlite:///test.db
+          SUPABASE_URL: https://test.supabase.co
+          SUPABASE_KEY: test-key
           REDIS_URL: redis://localhost:6379/0
           SECRET_KEY: test-secret-key-ci
 
@@ -85,11 +85,10 @@ jobs:
             PORT=8000
             RELOAD=false
             LOG_LEVEL=warning
-            MONGO_DB_NAME=ibms_enterprise
           secrets: |
             SECRET_KEY=ibms-secret-key:latest
-            MARIADB_URI=ibms-db-uri:latest
-            MONGO_URI=ibms-mongo-uri:latest
+            SUPABASE_URL=ibms-supabase-url:latest
+            SUPABASE_KEY=ibms-supabase-key:latest
             REDIS_URL=ibms-redis-url:latest
 
       - name: Show deployed URL

@@ -35,6 +35,10 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
+
+# Load .env BEFORE any IBMS imports so env vars are available at module level
+load_dotenv()
+
 from fastapi import (
     Cookie,
     Depends,
@@ -97,8 +101,10 @@ from ibms_core.services.fraud_detection import detect_fraud, isolation_forest_sc
 from ibms_core.services.decision_engine import evaluate_document
 from ibms_core.monitoring.metrics import inc_requests, snapshot
 from ibms_core.monitoring.tracing import start_trace
-from ibms_core.database.connection import connect_db, close_db, get_db, async_mongo_is_available, mark_async_mongo_down
-from ibms_core.database.mariadb_connection import connect_mariadb, close_mariadb
+from ibms_core.database.supabase_connection import (
+    connect_supabase, close_supabase, get_supabase_async,
+    async_supabase_is_available, mark_async_supabase_down,
+)
 from ibms_core.database.models import (
     KPIOps,
     NotificationOps,
@@ -107,7 +113,7 @@ from ibms_core.database.models import (
     WebhookLogOps,
     ProfileOps,
 )
-from ibms_core.database.mariadb_ops import (
+from ibms_core.database.supabase_ops import (
     CustomerOps,
     ProductOps,
     OrderOps,
@@ -116,8 +122,6 @@ from ibms_core.database.mariadb_ops import (
     InventoryMovementOps,
     ERPSummaryOps,
 )
-
-load_dotenv()
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -251,15 +255,15 @@ async def push_notification(title: str, message: str, level: str = "info", targe
     _notifications.append(notif)
     if len(_notifications) > 500:
         _notifications.pop(0)
-    # Persist to MongoDB (skip if async MongoDB in cooldown)
-    if async_mongo_is_available():
+    # Persist to Supabase (skip if async Supabase in cooldown)
+    if async_supabase_is_available():
         try:
             await NotificationOps.create(
                 title=title, message=message, level=level, target_user=target_user,
             )
         except Exception as exc:
-            mark_async_mongo_down()
-            logger.warning("MongoDB notification save failed: %s", exc)
+            mark_async_supabase_down()
+            logger.warning("Supabase notification save failed: %s", exc)
     payload = {"type": "notification", "payload": notif}
     if target_user:
         await ws_manager.send_personal(target_user, payload)
@@ -296,11 +300,11 @@ async def refresh_kpis(company: str = "Default Company"):
     if len(_kpi_history) > 1000:
         _kpi_history.pop(0)
     await cache_set(f"ibms:kpi:{company}", json.dumps(kpi), ex=900)
-    # Persist to MongoDB
+    # Persist to Supabase
     try:
         await KPIOps.save_snapshot(kpi)
     except Exception as exc:
-        logger.warning("MongoDB KPI save failed: %s", exc)
+        logger.warning("Supabase KPI save failed: %s", exc)
     await ws_manager.broadcast({"type": "kpi_update", "payload": kpi})
     return kpi
 
@@ -336,19 +340,13 @@ async def _scheduler_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("=== IBMS Enterprise Server v2.0 starting ===")
-    # Connect MongoDB
+    # Connect Supabase
     try:
-        await connect_db()
-        logger.info("MongoDB connected successfully")
+        await connect_supabase()
+        logger.info("Supabase connected successfully")
     except Exception as exc:
-        mark_async_mongo_down()
-        logger.error("MongoDB connection failed: %s — falling back to in-memory", exc)
-    # Connect MariaDB
-    try:
-        await connect_mariadb()
-        logger.info("MariaDB connected successfully")
-    except Exception as exc:
-        logger.error("MariaDB connection failed: %s", exc)
+        mark_async_supabase_down()
+        logger.error("Supabase connection failed: %s — falling back to in-memory", exc)
     await get_redis()
     await refresh_kpis()
     task = asyncio.create_task(_scheduler_loop())
@@ -356,10 +354,8 @@ async def lifespan(app: FastAPI):
     global _scheduler_running
     _scheduler_running = False
     task.cancel()
-    # Close MariaDB
-    await close_mariadb()
-    # Close MongoDB
-    await close_db()
+    # Close Supabase
+    await close_supabase()
     r = await get_redis()
     if r:
         await r.aclose()
@@ -738,30 +734,19 @@ async def audit_log_endpoint(limit: int = 100, event_type: str = "", user: dict 
 async def health():
     r = await get_redis()
     uptime = round(time.time() - _server_start_time, 1)
-    # Check MongoDB (with async cooldown)
-    mongo_ok = False
-    if async_mongo_is_available():
+    # Check Supabase (with async cooldown)
+    supabase_ok = False
+    if async_supabase_is_available():
         try:
-            db = get_db()
-            await db.client.admin.command("ping")
-            mongo_ok = True
+            sb = get_supabase_async()
+            # Simple connectivity test via a lightweight query
+            await sb.table("users").select("user_id", count="exact").limit(0).execute()
+            supabase_ok = True
         except Exception:
-            mark_async_mongo_down()
-    # Check MariaDB
-    mariadb_ok = False
-    try:
-        from ibms_core.database.mariadb_connection import get_engine
-        engine = get_engine()
-        if engine:
-            from sqlalchemy import text
-            async with engine.connect() as conn:
-                await conn.execute(text("SELECT 1"))
-            mariadb_ok = True
-    except Exception:
-        pass
+            mark_async_supabase_down()
     return {
         "status": "healthy", "version": "2.0.5", "redis": r is not None,
-        "mongodb": mongo_ok, "mariadb": mariadb_ok,
+        "supabase": supabase_ok,
         "uptime_seconds": uptime, "uptime_human": f"{int(uptime // 3600)}h {int((uptime % 3600) // 60)}m",
         "total_requests": _request_count, "total_errors": _error_count,
         "error_rate": round((_error_count / max(_request_count, 1)) * 100, 2),
@@ -781,13 +766,13 @@ async def auth_bench():
     import time as _t
     results = {}
 
-    # 1. Sync MongoDB call (rate limit check)
+    # 1. Sync Supabase call (rate limit check)
     s = _t.perf_counter()
     try:
         check_rate_limit("bench:test")
     except Exception:
         pass
-    results["mongo_sync_ms"] = round((_t.perf_counter() - s) * 1000, 1)
+    results["supabase_sync_ms"] = round((_t.perf_counter() - s) * 1000, 1)
 
     # 2. bcrypt hash
     s = _t.perf_counter()
@@ -801,15 +786,15 @@ async def auth_bench():
     verify_password("BenchmarkTest123!", _h)
     results["bcrypt_verify_ms"] = round((_t.perf_counter() - s) * 1000, 1)
 
-    # 4. Async MongoDB (with cooldown)
+    # 4. Async Supabase (with cooldown)
     s = _t.perf_counter()
-    if async_mongo_is_available():
+    if async_supabase_is_available():
         try:
-            db = get_db()
-            await db.client.admin.command("ping")
+            sb = get_supabase_async()
+            await sb.table("users").select("user_id", count="exact").limit(0).execute()
         except Exception:
-            mark_async_mongo_down()
-    results["mongo_async_ms"] = round((_t.perf_counter() - s) * 1000, 1)
+            mark_async_supabase_down()
+    results["supabase_async_ms"] = round((_t.perf_counter() - s) * 1000, 1)
 
     # 5. JWT create
     s = _t.perf_counter()
@@ -825,38 +810,26 @@ async def system_status():
     r = await get_redis()
     uptime = time.time() - _server_start_time
     top_endpoints = sorted(_endpoint_stats.items(), key=lambda x: x[1]["count"], reverse=True)[:10]
-    # Check MongoDB (with async cooldown)
-    mongo_ok = False
-    if async_mongo_is_available():
+    # Check Supabase (with async cooldown)
+    supabase_ok = False
+    if async_supabase_is_available():
         try:
-            db = get_db()
-            await db.client.admin.command("ping")
-            mongo_ok = True
+            sb = get_supabase_async()
+            await sb.table("users").select("user_id", count="exact").limit(0).execute()
+            supabase_ok = True
         except Exception:
-            mark_async_mongo_down()
-    # Check MariaDB
-    mariadb_ok = False
-    try:
-        from ibms_core.database.mariadb_connection import get_engine
-        engine = get_engine()
-        if engine:
-            from sqlalchemy import text
-            async with engine.connect() as conn:
-                await conn.execute(text("SELECT 1"))
-            mariadb_ok = True
-    except Exception:
-        pass
+            mark_async_supabase_down()
     return api_response({
         "server": {"status": "healthy", "version": "2.0.5", "uptime_seconds": round(uptime, 1), "uptime_human": f"{int(uptime // 3600)}h {int((uptime % 3600) // 60)}m {int(uptime % 60)}s"},
         "performance": {"total_requests": _request_count, "total_errors": _error_count, "error_rate_pct": round((_error_count / max(_request_count, 1)) * 100, 2), "ws_connections": len(ws_manager.active)},
-        "infrastructure": {"redis": {"connected": r is not None}, "mongodb": {"connected": mongo_ok}, "mariadb": {"connected": mariadb_ok}, "cache": {"type": "redis" if r else "in-memory", "entries": len(_mem_cache)}},
+        "infrastructure": {"redis": {"connected": r is not None}, "supabase": {"connected": supabase_ok}, "cache": {"type": "redis" if r else "in-memory", "entries": len(_mem_cache)}},
         "top_endpoints": [{"path": path, "requests": stats["count"], "avg_ms": round(stats["total_ms"] / max(stats["count"], 1), 2)} for path, stats in top_endpoints],
     })
 
 
 @app.get("/api/notifications")
 async def get_notifications(limit: int = 50, user: dict = Depends(require_auth)):
-    # Try MongoDB first
+    # Try Supabase first
     try:
         notifs = await NotificationOps.find_recent(limit=limit, user_id=user.get("sub", ""))
         if notifs:
@@ -874,11 +847,10 @@ async def dashboard_snapshot(company: str = "Default Company"):
     cached = await cache_get(f"ibms:kpi:{company}")
     if cached:
         return {"company": company, "kpi": json.loads(cached)}
-    # Try MongoDB
+    # Try Supabase
     try:
         kpi = await KPIOps.get_latest(company)
         if kpi:
-            kpi.pop("_id", None)
             return {"company": company, "kpi": kpi}
     except Exception:
         pass
@@ -888,7 +860,7 @@ async def dashboard_snapshot(company: str = "Default Company"):
 
 @app.get("/api/dashboard/history")
 async def kpi_history(limit: int = 50):
-    # Try MongoDB first
+    # Try Supabase first
     try:
         history = await KPIOps.get_history(limit=limit)
         if history:
@@ -984,17 +956,91 @@ async def decision_evaluate(req: DecisionRequest):
 
 @app.post("/api/copilot/ask")
 async def copilot_ask(req: CopilotRequest):
-    q = req.question.lower()
-    if any(w in q for w in ["kpi", "metric", "performance", "revenue", "margin"]):
-        kpi = _kpi_store.get("Default Company", {})
-        return {"question": req.question, "answer": f"Current KPI snapshot:\n• Revenue Run Rate: ₹{kpi.get('revenue_run_rate', 0):,.0f}\n• Net Margin: {kpi.get('net_margin', 0)}%\n• Risk Exposure: {kpi.get('risk_exposure', 0)}%\n• Forecast Accuracy: {kpi.get('forecast_accuracy', 0)}%\n• Compliance: {kpi.get('compliance_score', 0)}%", "confidence": 0.95, "sources": ["kpi_engine", "real_time_data"]}
-    elif any(w in q for w in ["risk", "threat", "danger"]):
-        return {"question": req.question, "answer": "Current risk exposure is at 31.2%. Key risk factors include transaction volume anomalies and 3 active alerts. Review the risk scoring panel for detailed analysis.", "confidence": 0.88, "sources": ["risk_engine", "anomaly_detector"]}
-    elif any(w in q for w in ["forecast", "predict", "future"]):
-        return {"question": req.question, "answer": "Sales forecast (Prophet Ensemble v2) shows 8.2% growth trajectory over 12 months with 94.7% accuracy. Upper CI suggests potential 12% growth.", "confidence": 0.91, "sources": ["forecast_engine", "prophet_model"]}
-    elif any(w in q for w in ["compliance", "audit", "regulation"]):
-        return {"question": req.question, "answer": "Compliance score is at 97.1%. All major controls passing. Recommendations: update approval matrices for transactions above ₹5L and schedule quarterly SOX review.", "confidence": 0.93, "sources": ["compliance_engine"]}
-    return {"question": req.question, "answer": "I can help with KPIs, risk analysis, forecasts, compliance checks, and business insights. Ask about specific metrics or business areas.", "confidence": 0.70, "sources": ["ai_copilot"]}
+    """AI Copilot powered by Groq LLM with real-time business context."""
+    import httpx
+
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+    if not GROQ_API_KEY:
+        # Fallback to basic response if no API key configured
+        return {"question": req.question, "answer": "AI Copilot is not configured. Please set the GROQ_API_KEY environment variable.", "confidence": 0.0, "sources": ["system"]}
+
+    # Gather real-time business context
+    kpi = _kpi_store.get("Default Company", {})
+
+    # Gather live ERP dataset for richer AI context
+    erp_context = ""
+    try:
+        overview = await ERPSummaryOps.get_overview()
+        c = overview.get("customers", {})
+        p = overview.get("products", {})
+        o = overview.get("orders", {})
+        inv = overview.get("invoices", {})
+        emp = overview.get("employees", {})
+        erp_context = f"""
+Live ERP Dataset (from Supabase):
+- Customers: {c.get('total', 0)} total, {c.get('active', 0)} active
+- Products: {p.get('total', 0)} total, {p.get('active', 0)} active, {p.get('low_stock', 0)} low-stock alerts
+- Orders: {o.get('total', 0)} total, {o.get('pending', 0)} pending
+- Invoices: {inv.get('total', 0)} total, {inv.get('unpaid', 0)} unpaid
+- Employees: {emp.get('total', 0)} total, {emp.get('active', 0)} active"""
+    except Exception:
+        erp_context = "\nLive ERP data unavailable."
+
+    system_context = f"""You are the IBMS AI Copilot — an intelligent business analyst assistant for an Integrated Management Business Suite (ERP platform).
+
+You have access to real-time business data:
+- Revenue Run Rate: ₹{kpi.get('revenue_run_rate', 0):,.0f}
+- Net Margin: {kpi.get('net_margin', 0)}%
+- Risk Exposure: {kpi.get('risk_exposure', 0)}%
+- Forecast Accuracy: {kpi.get('forecast_accuracy', 0)}%
+- Compliance Score: {kpi.get('compliance_score', 0)}%
+- Budget Variance: {kpi.get('budget_variance', 0)}%
+- Revenue Growth: {kpi.get('revenue_growth', 0)}%
+- Active Risk Alerts: {kpi.get('active_alerts', 0)}
+{erp_context}
+
+The platform includes these ERP modules: Customers, Products, Orders, Invoices, Inventory, Employees.
+It also has: KPI Dashboard, Sales Forecasting (Prophet model), Risk Scoring, Fraud Detection, Compliance Engine, Budget Optimizer, Digital Twin Simulation, and Pricing Engine.
+
+Provide concise, actionable business insights. Use the real-time data above when relevant. Format responses clearly with bullet points when listing multiple items. Always suggest next steps or recommended actions."""
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "llama-3.1-8b-instant",
+                    "messages": [
+                        {"role": "system", "content": system_context},
+                        {"role": "user", "content": req.question},
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 1024,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            answer = data["choices"][0]["message"]["content"]
+            model_used = data.get("model", "llama-3.1-8b-instant")
+            usage = data.get("usage", {})
+
+            return {
+                "question": req.question,
+                "answer": answer,
+                "confidence": 0.92,
+                "sources": ["groq_llm", model_used, "real_time_kpi"],
+                "tokens_used": usage.get("total_tokens", 0),
+            }
+    except httpx.HTTPStatusError as exc:
+        logger.error("Groq API HTTP error: %s %s", exc.response.status_code, exc.response.text[:200])
+        return {"question": req.question, "answer": f"AI service temporarily unavailable (HTTP {exc.response.status_code}). Please try again.", "confidence": 0.0, "sources": ["error"]}
+    except Exception as exc:
+        logger.error("Groq API error: %s", exc)
+        return {"question": req.question, "answer": f"AI service error: {type(exc).__name__}: {exc}", "confidence": 0.0, "sources": ["error"]}
 
 
 @app.post("/api/leads/score")
@@ -1049,12 +1095,19 @@ async def list_endpoints():
 # ===================================================================
 # ERP — CUSTOMERS
 # ===================================================================
+VALID_CUSTOMER_SEGMENTS = {"enterprise", "mid_market", "small_business", "individual"}
+SEGMENT_ALIASES = {"sme": "small_business", "startup": "individual", "midmarket": "mid_market"}
+
+def _normalize_segment(seg: str) -> str:
+    seg = seg.strip().lower()
+    return SEGMENT_ALIASES.get(seg, seg)
+
 class CustomerCreateRequest(BaseModel):
     name: str
     email: str = ""
     phone: str = ""
     company: str = ""
-    segment: str = "sme"
+    segment: str = "small_business"
     credit_limit: float = 50000.0
     address: str = ""
     city: str = ""
@@ -1072,6 +1125,7 @@ class CustomerUpdateRequest(BaseModel):
     city: str = ""
     country: str = ""
     is_active: bool = None
+    position: str = None  # alias for designation (backward compat)
 
 
 @app.get("/api/erp/customers")
@@ -1108,6 +1162,10 @@ async def get_customer(customer_id: str, user: dict = Depends(require_auth)):
 async def create_customer(req: CustomerCreateRequest, user: dict = Depends(require_auth)):
     try:
         data = req.model_dump(exclude_unset=True)
+        if "segment" in data:
+            data["segment"] = _normalize_segment(data["segment"])
+            if data["segment"] not in VALID_CUSTOMER_SEGMENTS:
+                return error_response(f"Invalid segment. Must be one of: {', '.join(VALID_CUSTOMER_SEGMENTS)}", 400)
         result = await CustomerOps.create(data)
         return api_response(result)
     except Exception as exc:
@@ -1115,8 +1173,13 @@ async def create_customer(req: CustomerCreateRequest, user: dict = Depends(requi
 
 
 @app.put("/api/erp/customers/{customer_id}")
+@app.post("/api/erp/customers/{customer_id}")
 async def update_customer(customer_id: str, req: CustomerUpdateRequest, user: dict = Depends(require_auth)):
     data = {k: v for k, v in req.model_dump(exclude_unset=True).items() if v is not None and v != ""}
+    if "segment" in data:
+        data["segment"] = _normalize_segment(data["segment"])
+        if data["segment"] not in VALID_CUSTOMER_SEGMENTS:
+            return error_response(f"Invalid segment. Must be one of: {', '.join(VALID_CUSTOMER_SEGMENTS)}", 400)
     result = await CustomerOps.update(customer_id, data)
     if not result:
         return error_response("Customer not found", 404)
@@ -1206,6 +1269,7 @@ async def create_product(req: ProductCreateRequest, user: dict = Depends(require
 
 
 @app.put("/api/erp/products/{product_id}")
+@app.post("/api/erp/products/{product_id}")
 async def update_product(product_id: str, req: ProductUpdateRequest, user: dict = Depends(require_auth)):
     data = {k: v for k, v in req.model_dump(exclude_unset=True).items() if v is not None and v != ""}
     result = await ProductOps.update(product_id, data)
@@ -1229,6 +1293,11 @@ class OrderItemInput(BaseModel):
     product_id: str
     quantity: int = 1
     discount_pct: float = 0
+
+
+class StatusUpdateRequest(BaseModel):
+    status: str
+    paid_amount: float = None
 
 
 class OrderCreateRequest(BaseModel):
@@ -1279,8 +1348,9 @@ async def create_order(req: OrderCreateRequest, user: dict = Depends(require_aut
 
 
 @app.put("/api/erp/orders/{order_id}/status")
-async def update_order_status(order_id: str, new_status: str, user: dict = Depends(require_auth)):
-    result = await OrderOps.update_status(order_id, new_status)
+@app.post("/api/erp/orders/{order_id}/status")
+async def update_order_status(order_id: str, req: StatusUpdateRequest, user: dict = Depends(require_auth)):
+    result = await OrderOps.update_status(order_id, req.status)
     if not result:
         return error_response("Order not found", 404)
     return api_response(result)
@@ -1339,8 +1409,9 @@ async def create_invoice(req: InvoiceCreateRequest, user: dict = Depends(require
 
 
 @app.put("/api/erp/invoices/{invoice_id}/status")
-async def update_invoice_status(invoice_id: str, new_status: str, paid_amount: float = None, user: dict = Depends(require_auth)):
-    result = await InvoiceOps.update_status(invoice_id, new_status, paid_amount)
+@app.post("/api/erp/invoices/{invoice_id}/status")
+async def update_invoice_status(invoice_id: str, req: StatusUpdateRequest, user: dict = Depends(require_auth)):
+    result = await InvoiceOps.update_status(invoice_id, req.status, req.paid_amount)
     if not result:
         return error_response("Invoice not found", 404)
     return api_response(result)
@@ -1349,6 +1420,23 @@ async def update_invoice_status(invoice_id: str, new_status: str, paid_amount: f
 # ===================================================================
 # ERP — EMPLOYEES
 # ===================================================================
+def _map_employee_fields(data: dict) -> dict:
+    """Translate frontend field names to DB column names for Employee."""
+    if "position" in data:
+        data["designation"] = data.pop("position")
+    if "hire_date" in data:
+        val = data.pop("hire_date")
+        data["date_of_joining"] = val if val else None
+    return data
+
+def _enrich_employee_response(emp: dict) -> dict:
+    """Add frontend-friendly aliases to employee data."""
+    if emp:
+        emp["position"] = emp.get("designation", "")
+        emp["hire_date"] = emp.get("date_of_joining")
+    return emp
+
+
 class EmployeeCreateRequest(BaseModel):
     employee_code: str
     first_name: str
@@ -1357,8 +1445,10 @@ class EmployeeCreateRequest(BaseModel):
     phone: str = ""
     department: str = ""
     position: str = ""
+    designation: str = ""
     salary: float = 0
     hire_date: str = ""
+    date_of_joining: str = ""
 
 
 class EmployeeUpdateRequest(BaseModel):
@@ -1368,6 +1458,7 @@ class EmployeeUpdateRequest(BaseModel):
     phone: str = ""
     department: str = ""
     position: str = ""
+    designation: str = ""
     salary: float = None
     is_active: bool = None
 
@@ -1380,6 +1471,10 @@ async def list_employees(
 ):
     try:
         result = await EmployeeOps.list_all(limit=limit, offset=offset, department=department, search=search)
+        if isinstance(result, list):
+            result = [_enrich_employee_response(e) for e in result]
+        elif result and "items" in result:
+            result["items"] = [_enrich_employee_response(e) for e in result["items"]]
         return api_response(result)
     except Exception as exc:
         return error_response(str(exc), 500)
@@ -1398,26 +1493,34 @@ async def get_employee(emp_id: str, user: dict = Depends(require_auth)):
     result = await EmployeeOps.get_by_id(emp_id)
     if not result:
         return error_response("Employee not found", 404)
-    return api_response(result)
+    return api_response(_enrich_employee_response(result))
 
 
 @app.post("/api/erp/employees")
 async def create_employee(req: EmployeeCreateRequest, user: dict = Depends(require_auth)):
     try:
         data = req.model_dump(exclude_unset=True)
+        data = _map_employee_fields(data)
+        # Handle both field name variants: prefer designation/date_of_joining
+        data.pop("position", None)
+        data.pop("hire_date", None)
         result = await EmployeeOps.create(data)
-        return api_response(result)
+        return api_response(_enrich_employee_response(result))
     except Exception as exc:
         return error_response(str(exc), 500)
 
 
 @app.put("/api/erp/employees/{emp_id}")
+@app.post("/api/erp/employees/{emp_id}")
 async def update_employee(emp_id: str, req: EmployeeUpdateRequest, user: dict = Depends(require_auth)):
     data = {k: v for k, v in req.model_dump(exclude_unset=True).items() if v is not None and v != ""}
+    data = _map_employee_fields(data)
+    data.pop("position", None)
+    data.pop("hire_date", None)
     result = await EmployeeOps.update(emp_id, data)
     if not result:
         return error_response("Employee not found", 404)
-    return api_response(result)
+    return api_response(_enrich_employee_response(result))
 
 
 # ===================================================================
@@ -1432,6 +1535,7 @@ class InventoryMovementRequest(BaseModel):
     notes: str = ""
 
 
+@app.post("/api/erp/inventory/movements")
 @app.post("/api/erp/inventory/movement")
 async def record_inventory_movement(req: InventoryMovementRequest, user: dict = Depends(require_auth)):
     try:

@@ -16,6 +16,11 @@ from pathlib import Path
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from dotenv import load_dotenv
+
+# Load .env from project root (two levels up from this script)
+_project_root = Path(__file__).resolve().parent.parent.parent
+load_dotenv(_project_root / ".env")
 
 # ─── Config ──────────────────────────────────────────────────────────────
 PROJECT_ID = os.getenv("GCP_PROJECT_ID", "total-handler-463313-e2")
@@ -23,8 +28,8 @@ REGION = "asia-south1"
 CONNECTOR_NAME = "ibms-connector"
 SERVICE_NAME = "ibms-web"
 REPO_NAME = "ibms-docker"
-SECRET_KEY = "ibms-secret-key-change-in-production"
-DB_USER_PASSWORD = "ibms_secure_pw_2025"
+SECRET_KEY = os.getenv("SECRET_KEY", "ibms-secret-key-change-in-production")
+JWT_SECRET = os.getenv("JWT_SECRET", SECRET_KEY)
 
 CB_URL = f"https://cloudbuild.googleapis.com/v1/projects/{PROJECT_ID}"
 STORAGE_URL = "https://storage.googleapis.com"
@@ -145,29 +150,76 @@ def trigger_build():
     print("[Build] Preparing source archive...")
     src = Path(__file__).resolve().parent.parent.parent
     buf = io.BytesIO()
-    skip = {".git", "__pycache__", "node_modules", ".venv", "deploy", ".mypy_cache"}
+    skip = {".git", "__pycache__", "node_modules", ".venv", "deploy", ".mypy_cache", "docs", "scripts", ".env"}
+    skip_ext = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".svg", ".pdf", ".log"}
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for p in sorted(src.rglob("*")):
             rel = p.relative_to(src)
             if any(part in skip for part in rel.parts):
                 continue
             if p.is_file():
+                if p.suffix.lower() in skip_ext:
+                    continue
                 tar.add(str(p), arcname=str(rel))
     buf.seek(0)
     size_kb = len(buf.getvalue()) / 1024
     print(f"  Archive size: {size_kb:.0f} KB")
 
-    # Upload to Cloud Storage
+    # Upload to Cloud Storage using resumable upload (chunked)
     bucket = f"{PROJECT_ID}_cloudbuild"
     obj_name = f"source/ibms-src-{int(time.time())}.tar.gz"
-    print(f"  Uploading to gs://{bucket}/{obj_name}...")
-    up_url = f"{STORAGE_URL}/upload/storage/v1/b/{bucket}/o?uploadType=media&name={obj_name}"
-    resp = session.post(up_url, data=buf.getvalue(),
-                        headers={**headers(), "Content-Type": "application/gzip"}, timeout=300)
-    if resp is None or resp.status_code not in (200, 201):
-        print(f"  Upload failed: {getattr(resp, 'status_code', 'N/A')} {getattr(resp, 'text', '')[:300]}")
+    print(f"  Uploading to gs://{bucket}/{obj_name} (resumable)...")
+    data_bytes = buf.getvalue()
+    total_size = len(data_bytes)
+
+    # Step 1: Initiate resumable upload
+    init_url = f"{STORAGE_URL}/upload/storage/v1/b/{bucket}/o?uploadType=resumable&name={obj_name}"
+    init_resp = session.post(init_url, headers={**headers(),
+                             "Content-Type": "application/json",
+                             "X-Upload-Content-Type": "application/gzip",
+                             "X-Upload-Content-Length": str(total_size)},
+                             json={"name": obj_name}, timeout=60)
+    if init_resp.status_code != 200:
+        print(f"  Resumable init failed: {init_resp.status_code} {init_resp.text[:300]}")
         return None
-    print("  Uploaded OK")
+    upload_uri = init_resp.headers.get("Location")
+    if not upload_uri:
+        print("  No upload URI returned")
+        return None
+
+    # Step 2: Upload in 2 MB chunks with retry
+    CHUNK = 2 * 1024 * 1024  # 2 MB
+    offset = 0
+    while offset < total_size:
+        end = min(offset + CHUNK, total_size)
+        chunk_data = data_bytes[offset:end]
+        content_range = f"bytes {offset}-{end - 1}/{total_size}"
+        for attempt in range(5):
+            try:
+                cr = session.put(upload_uri, data=chunk_data,
+                                 headers={"Content-Range": content_range,
+                                          "Content-Type": "application/gzip"},
+                                 timeout=120)
+                if cr.status_code in (200, 201):
+                    # Final chunk accepted
+                    offset = total_size
+                    break
+                elif cr.status_code == 308:
+                    # Chunk accepted, continue
+                    offset = end
+                    break
+                else:
+                    print(f"  Chunk upload error {cr.status_code}, retry {attempt+1}")
+                    time.sleep(2 ** attempt)
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                print(f"  Chunk upload exception ({attempt+1}/5): {type(e).__name__}")
+                time.sleep(2 ** attempt)
+        else:
+            print("  Upload failed after 5 retries for a chunk")
+            return None
+        pct = min(100, int(offset / total_size * 100))
+        print(f"  Uploaded {pct}%", flush=True)
+    print("  Upload complete")
 
     # Trigger Cloud Build
     tag = f"v{int(time.time())}"
@@ -225,25 +277,9 @@ def trigger_build():
 
 # ─── Step 3: Get infra IPs ──────────────────────────────────────────────
 def get_infra():
-    """Get Cloud SQL IP and Redis host."""
-    sql_ip = None
+    """Get Redis host (Cloud SQL removed — using Supabase)."""
     redis_host = None
     redis_port = 6379
-
-    try:
-        resp = session.get(
-            f"{SQL_URL}/projects/{PROJECT_ID}/instances/ibms-mysql", headers=headers(), timeout=30)
-        if resp and resp.status_code == 200:
-            for addr in resp.json().get("ipAddresses", []):
-                if addr.get("type") == "PRIVATE":
-                    sql_ip = addr["ipAddress"]
-                    break
-            if not sql_ip:
-                addrs = resp.json().get("ipAddresses", [])
-                if addrs:
-                    sql_ip = addrs[0]["ipAddress"]
-    except Exception as e:
-        print(f"  Cloud SQL check error: {e}")
 
     try:
         resp = session.get(
@@ -255,27 +291,28 @@ def get_infra():
     except Exception as e:
         print(f"  Redis check error: {e}")
 
-    print(f"[Infra] Cloud SQL IP: {sql_ip or 'N/A'}")
     print(f"[Infra] Redis: {redis_host or 'N/A'}:{redis_port}")
-    return sql_ip, redis_host, redis_port
+    return redis_host, redis_port
 
 
 # ─── Step 4: Deploy Cloud Run ───────────────────────────────────────────
-def deploy(image, sql_ip, redis_host, redis_port, mongo_uri):
+def deploy(image, redis_host, redis_port):
     """Patch Cloud Run service."""
     print(f"\n[Deploy] Updating Cloud Run service '{SERVICE_NAME}'...")
 
-    db_url = f"mysql+aiomysql://ibms_user:{DB_USER_PASSWORD}@{sql_ip}:3306/ibms_enterprise" if sql_ip else ""
     redis_url = f"redis://{redis_host}:{redis_port}/0" if redis_host else ""
 
     env_vars = {
-        "MONGO_URI": mongo_uri,
-        "MONGO_DB_NAME": "ibms_enterprise",
-        "DATABASE_URL": db_url,
+        "SUPABASE_URL": os.getenv("SUPABASE_URL", ""),
+        "SUPABASE_KEY": os.getenv("SUPABASE_KEY", ""),
         "REDIS_URL": redis_url,
         "SECRET_KEY": SECRET_KEY,
+        "JWT_SECRET": JWT_SECRET,
+        "HOST": "0.0.0.0",
+        "RELOAD": "false",
         "ENVIRONMENT": "production",
         "LOG_LEVEL": "info",
+        "GROQ_API_KEY": os.getenv("GROQ_API_KEY", "").strip(),
     }
     env_list = [{"name": k, "value": v} for k, v in env_vars.items() if v]
 
@@ -297,7 +334,7 @@ def deploy(image, sql_ip, redis_host, redis_port, mongo_uri):
             "scaling": {"minInstanceCount": 0, "maxInstanceCount": 4},
             "vpcAccess": {
                 "connector": f"projects/{PROJECT_ID}/locations/{REGION}/connectors/{CONNECTOR_NAME}",
-                "egress": "ALL_TRAFFIC",
+                "egress": "PRIVATE_RANGES_ONLY",
             },
         },
     }
@@ -361,16 +398,10 @@ def deploy(image, sql_ip, redis_host, redis_port, mongo_uri):
 
 # ─── Main ────────────────────────────────────────────────────────────────
 def main():
-    mongo_uri = "mongodb://localhost:27017"
-    if len(sys.argv) > 1 and not sys.argv[1].startswith("--"):
-        mongo_uri = sys.argv[1]
-    elif os.getenv("MONGO_URI"):
-        mongo_uri = os.getenv("MONGO_URI")
-
     print("=" * 60)
     print("  IBMS — Quick Cloud Run Redeploy")
     print("=" * 60)
-    print(f"  MONGO_URI: {mongo_uri[:50]}...")
+    print(f"  SUPABASE_URL: {os.getenv('SUPABASE_URL', '(not set)')[:50]}")
     print()
 
     force = "--force" in sys.argv
@@ -389,8 +420,8 @@ def main():
 
     print(f"\n[Image] {image}")
 
-    sql_ip, redis_host, redis_port = get_infra()
-    deploy(image, sql_ip, redis_host, redis_port, mongo_uri)
+    redis_host, redis_port = get_infra()
+    deploy(image, redis_host, redis_port)
 
     print("\n" + "=" * 60)
     print("  Done!")
@@ -398,4 +429,26 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import io as _io
+
+    class _Tee(_io.TextIOBase):
+        def __init__(self, *streams):
+            self._streams = streams
+        def write(self, data):
+            for s in self._streams:
+                s.write(data)
+                s.flush()
+            return len(data)
+        def flush(self):
+            for s in self._streams:
+                s.flush()
+
+    _log = open(_project_root / "_deploy_output.txt", "w", encoding="utf-8")
+    sys.stdout = _Tee(sys.__stdout__, _log)
+    sys.stderr = _Tee(sys.__stderr__, _log)
+    try:
+        main()
+    finally:
+        _log.close()
+        sys.stdout = sys.__stdout__
+        sys.stderr = sys.__stderr__

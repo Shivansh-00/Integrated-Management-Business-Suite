@@ -1,0 +1,99 @@
+// IBMS v2.0 — Architecture Diagram
+// Paste into eraser.io → New Diagram → Cloud Architecture
+
+Users [icon: users, color: blue] {
+  Employee [icon: user, label: "Employee"]
+  Manager [icon: briefcase, label: "Manager"]
+  Analyst [icon: bar-chart, label: "Analyst"]
+  Admin [icon: terminal, label: "Admin / DevOps"]
+}
+
+Frontend [icon: monitor, color: green] {
+  Auth UI [icon: lock, label: "Login + 2FA (US-01, US-02)"]
+  Dashboard [icon: activity, label: "KPI Dashboard (US-03, US-04)"]
+  AI Copilot [icon: cpu, label: "AI Insights (US-05)"]
+  Risk View [icon: alert-triangle, label: "Risk + Fraud (US-06)"]
+  Compliance View [icon: shield, label: "Compliance + Audit (US-07)"]
+  Business Tools [icon: briefcase, label: "Budget + Pricing + Leads (US-08, US-09)"]
+  Health View [icon: heart, label: "System Health (US-10)"]
+}
+
+NGINX [icon: server, color: cyan, label: "NGINX + TLS + WebSocket"]
+
+API Server [icon: layers, color: orange, label: "FastAPI (server.py)"] {
+  Auth API [icon: key, label: "Auth APIs"]
+  Dashboard API [icon: bar-chart-2, label: "Dashboard APIs"]
+  AI API [icon: cpu, label: "AI + Forecast APIs"]
+  Risk API [icon: alert-triangle, label: "Risk + Fraud APIs"]
+  Compliance API [icon: clipboard, label: "Compliance APIs"]
+  Business API [icon: briefcase, label: "Budget + Leads APIs"]
+  System API [icon: thermometer, label: "Health + Metrics APIs"]
+}
+
+Security [icon: shield, color: red, label: "Security (US-01, US-02, US-03)"] {
+  JWT [icon: key, label: "JWT + CSRF"]
+  TOTP [icon: smartphone, label: "2FA"]
+  RBAC [icon: users, label: "Role-Based Access"]
+}
+
+AI Engine [icon: brain, color: purple, label: "AI / ML (US-05, US-06, US-08, US-09)"] {
+  Copilot [icon: message-circle, label: "NLP Copilot"]
+  Fraud ML [icon: x-circle, label: "Fraud Detection"]
+  Forecast [icon: trending-up, label: "Forecasting"]
+  Scoring [icon: star, label: "Lead + Risk Scoring"]
+}
+
+Business Core [icon: zap, color: pink, label: "Business Engines (US-06–US-09)"] {
+  Risk Engine [icon: alert-triangle, label: "Risk Engine"]
+  Compliance Engine [icon: check-circle, label: "Compliance Engine"]
+  Budget Engine [icon: dollar-sign, label: "Budget + Pricing"]
+}
+
+Background Jobs [icon: repeat, color: yellow] {
+  KPI Refresh [icon: refresh-cw, label: "KPI Rollup (US-04)"]
+  Event Bus [icon: git-branch, label: "Event Pipeline"]
+}
+
+MongoDB [icon: database, color: red, label: "MongoDB 8.2"]
+Redis [icon: database, color: red, label: "Redis 7 (Cache + Queues)"]
+
+Deployment [icon: cloud, color: gray] {
+  Docker [icon: box, label: "Docker"]
+  K8s [icon: grid, label: "Kubernetes"]
+  AWS [icon: cloud, label: "AWS"]
+  GCP [icon: cloud, label: "GCP"]
+}
+
+// Users → Frontend
+Employee > Auth UI
+Manager > Dashboard
+Analyst > AI Copilot
+Admin > Health View
+
+// Frontend → NGINX → API
+Frontend > NGINX
+NGINX > API Server
+
+// API → Core Services
+Auth API > Security
+Dashboard API > Background Jobs
+AI API > AI Engine
+Risk API > AI Engine
+Risk API > Business Core
+Compliance API > Business Core
+Business API > Business Core
+Business API > AI Engine
+System API > Redis
+
+// Core → Data
+Security > MongoDB
+Security > Redis
+AI Engine > MongoDB
+Business Core > MongoDB
+Background Jobs > MongoDB
+Background Jobs > Redis
+
+// Deployment
+Deployment > NGINX
+Deployment > MongoDB
+Deployment > Redis

@@ -1,58 +1,177 @@
-# Integrated-Management-Business-Suite
+# Supabase CLI
 
-Enterprise-grade blueprint and starter implementation for an AI-first ERP platform built on **Frappe Framework + ERPNext principles**.
+[![Coverage Status](https://coveralls.io/repos/github/supabase/cli/badge.svg?branch=develop)](https://coveralls.io/github/supabase/cli?branch=develop) [![Bitbucket Pipelines](https://img.shields.io/bitbucket/pipelines/supabase-cli/setup-cli/master?style=flat-square&label=Bitbucket%20Canary)](https://bitbucket.org/supabase-cli/setup-cli/pipelines) [![Gitlab Pipeline Status](https://img.shields.io/gitlab/pipeline-status/sweatybridge%2Fsetup-cli?label=Gitlab%20Canary)
+](https://gitlab.com/sweatybridge/setup-cli/-/pipelines)
 
-## Included in this repository
+[Supabase](https://supabase.io) is an open source Firebase alternative. We're building the features of Firebase using enterprise-grade open source tools.
 
-- Advanced system blueprint: architecture, RBAC, AI modules, queues, APIs, event-driven topology.
-- Frappe custom app scaffold (`ibms_core`) with services, jobs, security, API endpoints, and monitoring hooks.
-- Enterprise deployment templates: Docker, Compose, NGINX, Kubernetes manifest, CI workflow.
-- UI assets for realtime KPI updates, AI insights panel, and dark mode.
-- Security and deployment documentation.
+This repository contains all the functionality for Supabase CLI.
 
-## Key docs
+- [x] Running Supabase locally
+- [x] Managing database migrations
+- [x] Creating and deploying Supabase Functions
+- [x] Generating types directly from your database schema
+- [x] Making authenticated HTTP requests to [Management API](https://supabase.com/docs/reference/api/introduction)
 
-- [`docs/system_blueprint.md`](docs/system_blueprint.md)
-- [`ARCHITECTURE.md`](ARCHITECTURE.md)
-- [`API_DOCUMENTATION.md`](API_DOCUMENTATION.md)
-- [`SECURITY_OVERVIEW.md`](SECURITY_OVERVIEW.md)
-- [`DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md)
-- [`FRAPPE_ENTERPRISE_IMPLEMENTATION.md`](FRAPPE_ENTERPRISE_IMPLEMENTATION.md)
+## Getting started
 
-## Enterprise Frappe Stack (New)
+### Install the CLI
 
-This repository now includes a production-style Frappe app implementation under `apps/ibms_core` with:
-
-- Enterprise doctypes and validations
-- JWT + RBAC API security hooks
-- REST + GraphQL APIs
-- Redis queue background jobs and event-driven webhook processing
-- Workflow JSON for recommendation lifecycle
-- Glassmorphism dashboard enhancements and Tailwind entry configuration
-- Docker Compose and Kubernetes templates for deployment
-
-Run the Frappe stack:
+Available via [NPM](https://www.npmjs.com) as dev dependency. To install:
 
 ```bash
-docker compose -f docker-compose.frappe.yml up -d
+npm i supabase --save-dev
 ```
 
-## Full Enterprise Tooling
+When installing with yarn 4, you need to disable experimental fetch with the following nodejs config.
 
-### Bootstrap Frappe Bench
+```
+NODE_OPTIONS=--no-experimental-fetch yarn add supabase
+```
 
-- Windows (WSL wrapper): `./scripts/bootstrap-frappe-windows.ps1`
-- WSL/Linux: `./scripts/bootstrap-frappe-wsl.sh`
+> **Note**
+For Bun versions below v1.0.17, you must add `supabase` as a [trusted dependency](https://bun.sh/guides/install/trusted) before running `bun add -D supabase`.
 
-### Quality + Tests
+<details>
+  <summary><b>macOS</b></summary>
+
+  Available via [Homebrew](https://brew.sh). To install:
+
+  ```sh
+  brew install supabase/tap/supabase
+  ```
+
+  To install the beta release channel:
+  
+  ```sh
+  brew install supabase/tap/supabase-beta
+  brew link --overwrite supabase-beta
+  ```
+  
+  To upgrade:
+
+  ```sh
+  brew upgrade supabase
+  ```
+</details>
+
+<details>
+  <summary><b>Windows</b></summary>
+
+  Available via [Scoop](https://scoop.sh). To install:
+
+  ```powershell
+  scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
+  scoop install supabase
+  ```
+
+  To upgrade:
+
+  ```powershell
+  scoop update supabase
+  ```
+</details>
+
+<details>
+  <summary><b>Linux</b></summary>
+
+  Available via [Homebrew](https://brew.sh) and Linux packages.
+
+  #### via Homebrew
+
+  To install:
+
+  ```sh
+  brew install supabase/tap/supabase
+  ```
+
+  To upgrade:
+
+  ```sh
+  brew upgrade supabase
+  ```
+
+  #### via Linux packages
+
+  Linux packages are provided in [Releases](https://github.com/supabase/cli/releases). To install, download the `.apk`/`.deb`/`.rpm`/`.pkg.tar.zst` file depending on your package manager and run the respective commands.
+
+  ```sh
+  sudo apk add --allow-untrusted <...>.apk
+  ```
+
+  ```sh
+  sudo dpkg -i <...>.deb
+  ```
+
+  ```sh
+  sudo rpm -i <...>.rpm
+  ```
+
+  ```sh
+  sudo pacman -U <...>.pkg.tar.zst
+  ```
+</details>
+
+<details>
+  <summary><b>Other Platforms</b></summary>
+
+  You can also install the CLI via [go modules](https://go.dev/ref/mod#go-install) without the help of package managers.
+
+  ```sh
+  go install github.com/supabase/cli@latest
+  ```
+
+  Add a symlink to the binary in `$PATH` for easier access:
+
+  ```sh
+  ln -s "$(go env GOPATH)/bin/cli" /usr/bin/supabase
+  ```
+
+  This works on other non-standard Linux distros.
+</details>
+
+<details>
+  <summary><b>Community Maintained Packages</b></summary>
+
+  Available via [pkgx](https://pkgx.sh/). Package script [here](https://github.com/pkgxdev/pantry/blob/main/projects/supabase.com/cli/package.yml).
+  To install in your working directory:
+
+  ```bash
+  pkgx install supabase
+  ```
+
+  Available via [Nixpkgs](https://nixos.org/). Package script [here](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/tools/supabase-cli/default.nix).
+</details>
+
+### Run the CLI
 
 ```bash
-pip install -r requirements-dev.txt
-pre-commit run --all-files
-pytest -q apps/ibms_core/tests
+supabase bootstrap
 ```
 
-### AWS Infrastructure
+Or using npx:
 
-Terraform templates are in `deploy/aws/terraform`.
-See `deploy/aws/README.md` for usage.
+```bash
+npx supabase bootstrap
+```
+
+The bootstrap command will guide you through the process of setting up a Supabase project using one of the [starter](https://github.com/supabase-community/supabase-samples/blob/main/samples.json) templates.
+
+## Docs
+
+Command & config reference can be found [here](https://supabase.com/docs/reference/cli/about).
+
+## Breaking changes
+
+We follow semantic versioning for changes that directly impact CLI commands, flags, and configurations.
+
+However, due to dependencies on other service images, we cannot guarantee that schema migrations, seed.sql, and generated types will always work for the same CLI major version. If you need such guarantees, we encourage you to pin a specific version of CLI in package.json.
+
+## Developing
+
+To run from source:
+
+```sh
+# Go >= 1.22
+go run . help
+```

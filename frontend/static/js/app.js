@@ -220,7 +220,7 @@ const IBMS = (() => {
             }
 
             if (data.data?.requires_2fa) {
-                $("totpGroup").style.display = "block";
+                $("totpGroup").classList.remove("hidden");
                 $("loginTotp").focus();
                 toast.show("2FA Required", "Enter your 6-digit TOTP code", "info");
                 return false;
@@ -295,10 +295,10 @@ const IBMS = (() => {
             state.tokenExpiry = 0;
             if (state.refreshTimer) clearTimeout(state.refreshTimer);
             websocket.disconnect();
-            $("appLayout").style.display = "none";
+            $("appLayout").classList.add("hidden");
             $("authOverlay").classList.remove("hidden");
             $("loginForm").reset();
-            $("totpGroup").style.display = "none";
+            $("totpGroup").classList.add("hidden");
             toast.show("Signed Out", "Session ended securely", "info");
         },
 
@@ -307,7 +307,7 @@ const IBMS = (() => {
             state.csrfToken = null;
             state.user = null;
             websocket.disconnect();
-            $("appLayout").style.display = "none";
+            $("appLayout").classList.add("hidden");
             $("authOverlay").classList.remove("hidden");
             toast.show("Session Expired", "Please sign in again", "warning");
         },
@@ -329,14 +329,14 @@ const IBMS = (() => {
         },
 
         showLogin() {
-            $("loginForm").style.display = "";
-            $("registerForm").style.display = "none";
+            $("loginForm").classList.remove("hidden");
+            $("registerForm").classList.add("hidden");
             $("loginError").classList.remove("visible");
         },
 
         showRegister() {
-            $("loginForm").style.display = "none";
-            $("registerForm").style.display = "";
+            $("loginForm").classList.add("hidden");
+            $("registerForm").classList.remove("hidden");
             $("registerError").classList.remove("visible");
         },
 
@@ -347,7 +347,7 @@ const IBMS = (() => {
 
         _enterApp() {
             $("authOverlay").classList.add("hidden");
-            $("appLayout").style.display = "";
+            $("appLayout").classList.remove("hidden");
 
             // Update user display
             if (state.user) {
@@ -825,7 +825,7 @@ const IBMS = (() => {
             // Update badge
             const badge = $("copilotConfidence");
             if (badge && inputId === "copilotInput") {
-                badge.style.display = "";
+                badge.classList.remove("hidden");
                 badge.textContent = `${confPct}% confidence`;
                 badge.className = `badge badge--${confClass === "high" ? "success" : confClass === "medium" ? "" : "danger"}`;
             }
@@ -867,7 +867,7 @@ const IBMS = (() => {
             const badge = $("insightsBadge");
             if (badge && data.data.length) {
                 badge.textContent = data.data.length;
-                badge.style.display = "";
+                badge.classList.remove("hidden");
             }
         },
 
@@ -1125,9 +1125,9 @@ const IBMS = (() => {
             if (!badge) return;
             if (this._unread > 0) {
                 badge.textContent = this._unread > 99 ? "99+" : this._unread;
-                badge.style.display = "";
+                badge.classList.remove("hidden");
             } else {
-                badge.style.display = "none";
+                badge.classList.add("hidden");
             }
         },
     };
@@ -1165,7 +1165,7 @@ const IBMS = (() => {
             if (badge && state.activePage !== "events") {
                 const current = parseInt(badge.textContent) || 0;
                 badge.textContent = current + 1;
-                badge.style.display = "";
+                badge.classList.remove("hidden");
             }
         },
     };
@@ -1176,12 +1176,12 @@ const IBMS = (() => {
     const nav = {
         goto(page) {
             // Hide all pages
-            $$("[id^='page-']").forEach(el => { el.style.display = "none"; });
+            $$("[id^='page-']").forEach(el => { el.classList.add("hidden"); });
 
             // Show target page
             const targetEl = $(`page-${page}`);
             if (targetEl) {
-                targetEl.style.display = "";
+                targetEl.classList.remove("hidden");
 
                 // Page enter animation
                 if (!state.prefersReducedMotion) {
@@ -1214,7 +1214,7 @@ const IBMS = (() => {
             // Clear event badge when visiting events page
             if (page === "events") {
                 const badge = $("eventBadge");
-                if (badge) { badge.textContent = "0"; badge.style.display = "none"; }
+                if (badge) { badge.textContent = "0"; badge.classList.add("hidden"); }
             }
 
             // Load page-specific data
@@ -1328,7 +1328,7 @@ const IBMS = (() => {
                     <td><strong>${escHtml(c.name)}</strong></td>
                     <td>${escHtml(c.email || "—")}</td>
                     <td>${escHtml(c.company || "—")}</td>
-                    <td>${erp._badge(c.segment || "sme")}</td>
+                    <td>${erp._badge(c.segment || "small_business")}</td>
                     <td>${erp._fmtCurrency(c.credit_limit)}</td>
                     <td>${erp._fmtCurrency(c.outstanding_balance)}</td>
                     <td>${erp._badge(c.is_active ? "active" : "inactive", c.is_active ? "active" : "inactive")}</td>
@@ -1348,14 +1348,14 @@ const IBMS = (() => {
                 $("custEmail").value = data?.email || "";
                 $("custPhone").value = data?.phone || "";
                 $("custCompany").value = data?.company || "";
-                $("custSegment").value = data?.segment || "sme";
+                $("custSegment").value = data?.segment || "small_business";
                 $("custCreditLimit").value = data?.credit_limit ?? 50000;
                 $("custAddress").value = data?.address || "";
                 $("custCity").value = data?.city || "";
                 $("custCountry").value = data?.country || "";
-                $("customerModal").style.display = "flex";
+                $("customerModal").classList.remove("hidden");
             },
-            hideForm() { $("customerModal").style.display = "none"; },
+            hideForm() { $("customerModal").classList.add("hidden"); },
             async edit(id) {
                 const data = await api.get(`/api/erp/customers/${id}`);
                 if (data?.success) this.showForm(data.data);
@@ -1440,9 +1440,9 @@ const IBMS = (() => {
                 $("prodStock").value = data?.stock_quantity ?? 0;
                 $("prodReorder").value = data?.reorder_level ?? 10;
                 $("prodDesc").value = data?.description || "";
-                $("productModal").style.display = "flex";
+                $("productModal").classList.remove("hidden");
             },
-            hideForm() { $("productModal").style.display = "none"; },
+            hideForm() { $("productModal").classList.add("hidden"); },
             async edit(id) {
                 const data = await api.get(`/api/erp/products/${id}`);
                 if (data?.success) this.showForm(data.data);
@@ -1528,9 +1528,9 @@ const IBMS = (() => {
                     custs.data.forEach(c => { sel.innerHTML += `<option value="${c.id}">${escHtml(c.name)} (${escHtml(c.company || "")})</option>`; });
                 }
                 this.addItemRow();
-                $("orderModal").style.display = "flex";
+                $("orderModal").classList.remove("hidden");
             },
-            hideForm() { $("orderModal").style.display = "none"; },
+            hideForm() { $("orderModal").classList.add("hidden"); },
             addItemRow() {
                 const idx = this._itemCount++;
                 const div = document.createElement("div");
@@ -1639,9 +1639,9 @@ const IBMS = (() => {
                 if (custs?.data) {
                     custs.data.forEach(c => { sel.innerHTML += `<option value="${c.id}">${escHtml(c.name)}</option>`; });
                 }
-                $("invoiceModal").style.display = "flex";
+                $("invoiceModal").classList.remove("hidden");
             },
-            hideForm() { $("invoiceModal").style.display = "none"; },
+            hideForm() { $("invoiceModal").classList.add("hidden"); },
             async save() {
                 const body = {
                     customer_id: $("invoiceCustomer").value,
@@ -1778,12 +1778,12 @@ const IBMS = (() => {
                 $("empLastName").value = data?.last_name || "";
                 $("empPhone").value = data?.phone || "";
                 $("empDept").value = data?.department || "";
-                $("empPosition").value = data?.position || "";
+                $("empPosition").value = data?.designation || data?.position || "";
                 $("empSalary").value = data?.salary ?? "";
-                $("empHireDate").value = data?.hire_date ? data.hire_date.split("T")[0] : "";
-                $("employeeModal").style.display = "flex";
+                $("empHireDate").value = (data?.date_of_joining || data?.hire_date) ? (data?.date_of_joining || data?.hire_date).split("T")[0] : "";
+                $("employeeModal").classList.remove("hidden");
             },
-            hideForm() { $("employeeModal").style.display = "none"; },
+            hideForm() { $("employeeModal").classList.add("hidden"); },
             async edit(id) {
                 const data = await api.get(`/api/erp/employees/${id}`);
                 if (data?.success) this.showForm(data.data);
@@ -1793,9 +1793,9 @@ const IBMS = (() => {
                 const body = {
                     employee_code: $("empCode").value, email: $("empEmail").value,
                     first_name: $("empFirstName").value, last_name: $("empLastName").value,
-                    phone: $("empPhone").value, department: $("empDept").value, position: $("empPosition").value,
+                    phone: $("empPhone").value, department: $("empDept").value, designation: $("empPosition").value,
                     salary: parseFloat($("empSalary").value) || 0,
-                    hire_date: $("empHireDate").value || null,
+                    date_of_joining: $("empHireDate").value || null,
                 };
                 const res = id
                     ? await api.post(`/api/erp/employees/${id}`, body)
@@ -1880,7 +1880,7 @@ const IBMS = (() => {
         const mql = window.matchMedia("(max-width: 1024px)");
         const update = (e) => {
             const mobileBtn = $("mobileMenuBtn");
-            if (mobileBtn) mobileBtn.style.display = e.matches ? "inline-flex" : "none";
+            if (mobileBtn) mobileBtn.classList.toggle("hidden", !e.matches);
         };
         mql.addEventListener("change", update);
         update(mql);
@@ -1904,7 +1904,7 @@ const IBMS = (() => {
         const hasSession = await auth.checkSession();
         if (!hasSession) {
             $("authOverlay").classList.remove("hidden");
-            $("appLayout").style.display = "none";
+            $("appLayout").classList.add("hidden");
         }
     }
 

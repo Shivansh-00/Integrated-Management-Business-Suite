@@ -42,7 +42,7 @@
                     <label for="loginPassword">Password</label>
                     <input type="password" id="loginPassword" placeholder="Enter password" autocomplete="current-password" required>
                 </div>
-                <div class="form-group" id="totpGroup" style="display:none">
+                <div class="form-group hidden" id="totpGroup">
                     <label for="loginTotp">2FA Code</label>
                     <input type="text" id="loginTotp" placeholder="6-digit TOTP code" maxlength="6" inputmode="numeric" autocomplete="one-time-code">
                 </div>
@@ -54,7 +54,7 @@
             </form>
 
             <!-- Register Form -->
-            <form class="auth-form" id="registerForm" style="display:none" onsubmit="return IBMS.auth.register(event)">
+            <form class="auth-form hidden" id="registerForm" onsubmit="return IBMS.auth.register(event)">
                 <div class="form-group">
                     <label for="regUsername">Username</label>
                     <input type="text" id="regUsername" placeholder="Choose username" autocomplete="username" required>
@@ -81,7 +81,7 @@
 <!-- ══════════════════════════════════════════════════════════════════
      MAIN APP LAYOUT -- Sidebar + Content
      ══════════════════════════════════════════════════════════════════ -->
-<div class="app-layout" id="appLayout" style="display:none">
+<div class="app-layout hidden" id="appLayout">
 
     <!-- ===== SIDEBAR ===== -->
     <aside class="sidebar" id="sidebar">
@@ -106,7 +106,7 @@
             <a class="nav-item" data-page="ai-insights" onclick="IBMS.nav.goto('ai-insights')">
                 <span class="nav-item__icon">AI</span>
                 <span class="nav-item__label">AI Insights</span>
-                <span class="nav-item__badge" id="insightsBadge" style="display:none">0</span>
+                <span class="nav-item__badge hidden" id="insightsBadge">0</span>
             </a>
 
             <div class="sidebar__section-label">Operations</div>
@@ -161,7 +161,7 @@
             <a class="nav-item" data-page="events" onclick="IBMS.nav.goto('events')">
                 <span class="nav-item__icon">EV</span>
                 <span class="nav-item__label">Event Stream</span>
-                <span class="nav-item__badge" id="eventBadge" style="display:none">0</span>
+                <span class="nav-item__badge hidden" id="eventBadge">0</span>
             </a>
             <a class="nav-item" data-page="system" onclick="IBMS.nav.goto('system')">
                 <span class="nav-item__icon">SY</span>
@@ -193,7 +193,7 @@
         <!-- TOPBAR -->
         <header class="topbar">
             <div class="topbar__left">
-                <button class="topbar__btn" onclick="IBMS.nav.toggleSidebar()" aria-label="Toggle sidebar" style="display:none" id="mobileMenuBtn">☰</button>
+                <button class="topbar__btn hidden" onclick="IBMS.nav.toggleSidebar()" aria-label="Toggle sidebar" id="mobileMenuBtn">☰</button>
                 <div class="topbar__breadcrumb">
                     <span>IBMS</span>
                     <span>›</span>
@@ -208,7 +208,7 @@
                 <button class="topbar__btn" onclick="IBMS.kpi.refreshAll()" title="Refresh KPIs">Refresh</button>
                 <button class="notification-btn" onclick="IBMS.notifications.toggle()" title="Notifications" id="notifBtn">
                     <span class="notification-btn__glyph" aria-hidden="true"></span>
-                    <span class="notification-badge" id="notifBadge" style="display:none">0</span>
+                    <span class="notification-badge hidden" id="notifBadge">0</span>
                 </button>
                 <button class="theme-toggle" onclick="IBMS.theme.toggle()" title="Toggle theme" id="themeBtn">Dark</button>
                 <a class="topbar__btn" href="/api/docs" target="_blank">API Docs</a>
@@ -270,7 +270,7 @@
                 <section class="panel" id="forecastPanel">
                     <div class="panel__header">
                         <h2 class="panel__title">Sales Forecast</h2>
-                        <select id="forecastPeriods" class="select--sm" onchange="IBMS.forecast.load()">
+                        <select id="forecastPeriods" class="select--sm" title="Forecast period" onchange="IBMS.forecast.load()">
                             <option value="6">6 months</option>
                             <option value="12" selected>12 months</option>
                             <option value="24">24 months</option>
@@ -284,7 +284,7 @@
                 <section class="panel" id="copilotPanel">
                     <div class="panel__header">
                         <h2 class="panel__title">AI Copilot</h2>
-                        <span class="badge" id="copilotConfidence" style="display:none">95% confidence</span>
+                        <span class="badge hidden" id="copilotConfidence">95% confidence</span>
                     </div>
                     <div class="panel__body copilot">
                         <div class="copilot__messages" id="copilotMessages">
@@ -306,7 +306,7 @@
         <!-- ═══════════════════════════════════════════════════════════
              PAGE: ANALYTICS
              ═══════════════════════════════════════════════════════════ -->
-        <main class="dashboard" id="page-analytics" style="display:none">
+        <main class="dashboard hidden" id="page-analytics">
             <div class="dashboard__header">
                 <h1 class="dashboard__title">Analytics & Forecasting</h1>
                 <p class="dashboard__subtitle">Predictive models and trend analysis</p>
@@ -315,7 +315,7 @@
                 <section class="panel panel--full">
                     <div class="panel__header">
                         <h2 class="panel__title">Extended Forecast</h2>
-                        <select id="analyticsperiods" class="select--sm" onchange="IBMS.forecast.loadAnalytics()">
+                        <select id="analyticsperiods" class="select--sm" title="Analytics period" onchange="IBMS.forecast.loadAnalytics()">
                             <option value="6">6 months</option>
                             <option value="12">12 months</option>
                             <option value="24" selected>24 months</option>
@@ -366,7 +366,7 @@
         <!-- ═══════════════════════════════════════════════════════════
              PAGE: AI INSIGHTS
              ═══════════════════════════════════════════════════════════ -->
-        <main class="dashboard" id="page-ai-insights" style="display:none">
+        <main class="dashboard hidden" id="page-ai-insights">
             <div class="dashboard__header">
                 <h1 class="dashboard__title">AI Intelligence Hub</h1>
                 <p class="dashboard__subtitle">Machine-learning driven insights and anomaly detection</p>
@@ -418,7 +418,7 @@
         <!-- ═══════════════════════════════════════════════════════════
              PAGE: RISK & FRAUD
              ═══════════════════════════════════════════════════════════ -->
-        <main class="dashboard" id="page-risk" style="display:none">
+        <main class="dashboard hidden" id="page-risk">
             <div class="dashboard__header">
                 <h1 class="dashboard__title">Risk & Fraud Management</h1>
                 <p class="dashboard__subtitle">Real-time risk scoring and fraud detection engine</p>
@@ -429,7 +429,7 @@
                     <div class="panel__body tool-form">
                         <div class="form-row">
                             <label>Voucher Type</label>
-                            <select id="riskVoucherType" class="select--sm">
+                            <select id="riskVoucherType" class="select--sm" title="Voucher type">
                                 <option>Sales Invoice</option>
                                 <option>Purchase Invoice</option>
                                 <option>Journal Entry</option>
@@ -437,11 +437,11 @@
                         </div>
                         <div class="form-row">
                             <label>Voucher No</label>
-                            <input type="text" id="riskVoucherNo" value="SINV-00042" class="input--sm">
+                            <input type="text" id="riskVoucherNo" aria-label="Voucher Number" value="SINV-00042" class="input--sm">
                         </div>
                         <div class="form-row">
                             <label>Amount (₹)</label>
-                            <input type="number" id="riskAmount" value="250000" class="input--sm">
+                            <input type="number" id="riskAmount" aria-label="Amount" value="250000" class="input--sm">
                         </div>
                         <button class="btn btn--primary" onclick="IBMS.tools.scoreRisk()">Score Risk</button>
                         <div class="result-box" id="riskResult"></div>
@@ -453,15 +453,15 @@
                     <div class="panel__body tool-form">
                         <div class="form-row">
                             <label>Voucher No</label>
-                            <input type="text" id="fraudVoucherNo" value="SINV-00099" class="input--sm">
+                            <input type="text" id="fraudVoucherNo" aria-label="Fraud Voucher Number" value="SINV-00099" class="input--sm">
                         </div>
                         <div class="form-row">
                             <label>Amount (₹)</label>
-                            <input type="number" id="fraudAmount" value="750000" class="input--sm">
+                            <input type="number" id="fraudAmount" aria-label="Fraud Amount" value="750000" class="input--sm">
                         </div>
                         <div class="form-row">
                             <label>Velocity Index</label>
-                            <input type="number" id="fraudVelocity" value="0.6" step="0.1" class="input--sm">
+                            <input type="number" id="fraudVelocity" aria-label="Velocity Score" value="0.6" step="0.1" class="input--sm">
                         </div>
                         <button class="btn btn--primary" onclick="IBMS.tools.detectFraud()">Detect Fraud</button>
                         <div class="result-box" id="fraudResult"></div>
@@ -473,7 +473,7 @@
         <!-- ═══════════════════════════════════════════════════════════
              PAGE: COMPLIANCE
              ═══════════════════════════════════════════════════════════ -->
-        <main class="dashboard" id="page-compliance" style="display:none">
+        <main class="dashboard hidden" id="page-compliance">
             <div class="dashboard__header">
                 <h1 class="dashboard__title">Compliance Engine</h1>
                 <p class="dashboard__subtitle">Automated regulatory compliance verification</p>
@@ -484,7 +484,7 @@
                     <div class="panel__body tool-form">
                         <div class="form-row">
                             <label>Transaction Amount (₹)</label>
-                            <input type="number" id="compAmount" value="600000" class="input--sm">
+                            <input type="number" id="compAmount" aria-label="Compliance Amount" value="600000" class="input--sm">
                         </div>
                         <div class="form-row">
                             <label>Approval Reference</label>
@@ -524,7 +524,7 @@
         <!-- ═══════════════════════════════════════════════════════════
              PAGE: DYNAMIC PRICING
              ═══════════════════════════════════════════════════════════ -->
-        <main class="dashboard" id="page-pricing" style="display:none">
+        <main class="dashboard hidden" id="page-pricing">
             <div class="dashboard__header">
                 <h1 class="dashboard__title">Dynamic Pricing Engine</h1>
                 <p class="dashboard__subtitle">AI-driven price optimization</p>
@@ -535,19 +535,19 @@
                     <div class="panel__body tool-form">
                         <div class="form-row">
                             <label>Base Price (₹)</label>
-                            <input type="number" id="pricingBase" value="1000" class="input--sm">
+                            <input type="number" id="pricingBase" aria-label="Base Price" value="1000" class="input--sm">
                         </div>
                         <div class="form-row">
                             <label>Demand Index (0–1)</label>
-                            <input type="number" id="pricingDemand" value="0.7" step="0.1" min="0" max="1" class="input--sm">
+                            <input type="number" id="pricingDemand" aria-label="Demand Index" value="0.7" step="0.1" min="0" max="1" class="input--sm">
                         </div>
                         <div class="form-row">
                             <label>Stock Index (0–1)</label>
-                            <input type="number" id="pricingStock" value="0.3" step="0.1" min="0" max="1" class="input--sm">
+                            <input type="number" id="pricingStock" aria-label="Stock Level" value="0.3" step="0.1" min="0" max="1" class="input--sm">
                         </div>
                         <div class="form-row">
                             <label>Competitor Index (0–1)</label>
-                            <input type="number" id="pricingComp" value="0.5" step="0.1" min="0" max="1" class="input--sm">
+                            <input type="number" id="pricingComp" aria-label="Competitor Factor" value="0.5" step="0.1" min="0" max="1" class="input--sm">
                         </div>
                         <button class="btn btn--primary" onclick="IBMS.tools.suggestPrice()">Get Optimized Price</button>
                         <div class="result-box" id="pricingResult"></div>
@@ -559,7 +559,7 @@
         <!-- ═══════════════════════════════════════════════════════════
              PAGE: BUDGET OPTIMIZER
              ═══════════════════════════════════════════════════════════ -->
-        <main class="dashboard" id="page-budget" style="display:none">
+        <main class="dashboard hidden" id="page-budget">
             <div class="dashboard__header">
                 <h1 class="dashboard__title">Budget Optimizer</h1>
                 <p class="dashboard__subtitle">AI-powered budget allocation and optimization</p>
@@ -570,11 +570,11 @@
                     <div class="panel__body tool-form">
                         <div class="form-row">
                             <label>Growth Target (%)</label>
-                            <input type="number" id="budgetGrowth" value="10" step="1" class="input--sm">
+                            <input type="number" id="budgetGrowth" aria-label="Growth Target %" value="10" step="1" class="input--sm">
                         </div>
                         <div class="form-row">
                             <label>Budget Lines (JSON)</label>
-                            <textarea id="budgetLines" class="input--sm" rows="4">[{"dept":"Engineering","amount":500000},{"dept":"Marketing","amount":300000},{"dept":"Sales","amount":200000}]</textarea>
+                            <textarea id="budgetLines" aria-label="Budget Line Items" class="input--sm" rows="4">[{"dept":"Engineering","amount":500000},{"dept":"Marketing","amount":300000},{"dept":"Sales","amount":200000}]</textarea>
                         </div>
                         <button class="btn btn--primary" onclick="IBMS.tools.optimizeBudget()">Optimize Budget</button>
                         <div class="result-box" id="budgetResult"></div>
@@ -586,7 +586,7 @@
         <!-- ═══════════════════════════════════════════════════════════
              PAGE: LEAD SCORING
              ═══════════════════════════════════════════════════════════ -->
-        <main class="dashboard" id="page-leads" style="display:none">
+        <main class="dashboard hidden" id="page-leads">
             <div class="dashboard__header">
                 <h1 class="dashboard__title">Lead Scoring Engine</h1>
                 <p class="dashboard__subtitle">ML-powered lead qualification and scoring</p>
@@ -597,15 +597,15 @@
                     <div class="panel__body tool-form">
                         <div class="form-row">
                             <label>Lead Name</label>
-                            <input type="text" id="leadName" value="Acme Corp" class="input--sm">
+                            <input type="text" id="leadName" aria-label="Lead Name" value="Acme Corp" class="input--sm">
                         </div>
                         <div class="form-row">
                             <label>Engagement (0–1)</label>
-                            <input type="number" id="leadEngagement" value="0.8" step="0.1" min="0" max="1" class="input--sm">
+                            <input type="number" id="leadEngagement" aria-label="Engagement Score" value="0.8" step="0.1" min="0" max="1" class="input--sm">
                         </div>
                         <div class="form-row">
                             <label>Fit (0–1)</label>
-                            <input type="number" id="leadFit" value="0.9" step="0.1" min="0" max="1" class="input--sm">
+                            <input type="number" id="leadFit" aria-label="Fit Score" value="0.9" step="0.1" min="0" max="1" class="input--sm">
                         </div>
                         <button class="btn btn--primary" onclick="IBMS.tools.scoreLead()">Score Lead</button>
                         <div class="result-box" id="leadResult"></div>
@@ -617,7 +617,7 @@
         <!-- ═══════════════════════════════════════════════════════════
              PAGE: CUSTOMERS (ERP)
              ═══════════════════════════════════════════════════════════ -->
-        <main class="dashboard" id="page-customers" style="display:none">
+        <main class="dashboard hidden" id="page-customers">
             <div class="dashboard__header">
                 <h1 class="dashboard__title">Customer Management</h1>
                 <p class="dashboard__subtitle">Manage customer accounts, segments, and credit</p>
@@ -629,7 +629,7 @@
                         <h2 class="panel__title">Customers</h2>
                         <div class="panel__actions">
                             <input type="text" id="customerSearch" placeholder="Search customers…" class="input--sm" onkeyup="IBMS.erp.customers.load()">
-                            <select id="customerSegment" class="select--sm" onchange="IBMS.erp.customers.load()">
+                            <select id="customerSegment" class="select--sm" title="Customer segment" onchange="IBMS.erp.customers.load()">
                                 <option value="">All Segments</option>
                                 <option value="enterprise">Enterprise</option>
                                 <option value="mid_market">Mid-Market</option>
@@ -651,23 +651,23 @@
                 </section>
             </div>
             <!-- Customer Form Modal -->
-            <div class="modal-overlay" id="customerModal" style="display:none">
+            <div class="modal-overlay hidden" id="customerModal">
                 <div class="modal">
                     <div class="modal__header"><h3 id="customerModalTitle">Add Customer</h3><button class="modal__close" onclick="IBMS.erp.customers.hideForm()">&times;</button></div>
                     <div class="modal__body">
                         <input type="hidden" id="customerEditId">
-                        <div class="form-row"><label>Name *</label><input type="text" id="custName" class="input--sm" required></div>
-                        <div class="form-row"><label>Email</label><input type="email" id="custEmail" class="input--sm"></div>
-                        <div class="form-row"><label>Phone</label><input type="text" id="custPhone" class="input--sm"></div>
-                        <div class="form-row"><label>Company</label><input type="text" id="custCompany" class="input--sm"></div>
+                        <div class="form-row"><label for="custName">Name *</label><input type="text" id="custName" class="input--sm" required></div>
+                        <div class="form-row"><label for="custEmail">Email</label><input type="email" id="custEmail" class="input--sm"></div>
+                        <div class="form-row"><label for="custPhone">Phone</label><input type="text" id="custPhone" class="input--sm"></div>
+                        <div class="form-row"><label for="custCompany">Company</label><input type="text" id="custCompany" class="input--sm"></div>
                         <div class="form-grid-2">
-                            <div class="form-row"><label>Segment</label><select id="custSegment" class="select--sm"><option value="sme">SME</option><option value="enterprise">Enterprise</option><option value="mid_market">Mid-Market</option><option value="startup">Startup</option></select></div>
-                            <div class="form-row"><label>Credit Limit</label><input type="number" id="custCreditLimit" value="50000" class="input--sm"></div>
+                            <div class="form-row"><label for="custSegment">Segment</label><select id="custSegment" class="select--sm"><option value="sme">SME</option><option value="enterprise">Enterprise</option><option value="mid_market">Mid-Market</option><option value="startup">Startup</option></select></div>
+                            <div class="form-row"><label for="custCreditLimit">Credit Limit</label><input type="number" id="custCreditLimit" value="50000" class="input--sm"></div>
                         </div>
-                        <div class="form-row"><label>Address</label><input type="text" id="custAddress" class="input--sm"></div>
+                        <div class="form-row"><label for="custAddress">Address</label><input type="text" id="custAddress" class="input--sm"></div>
                         <div class="form-grid-2">
-                            <div class="form-row"><label>City</label><input type="text" id="custCity" class="input--sm"></div>
-                            <div class="form-row"><label>Country</label><input type="text" id="custCountry" class="input--sm"></div>
+                            <div class="form-row"><label for="custCity">City</label><input type="text" id="custCity" class="input--sm"></div>
+                            <div class="form-row"><label for="custCountry">Country</label><input type="text" id="custCountry" class="input--sm"></div>
                         </div>
                     </div>
                     <div class="modal__footer"><button class="btn btn--primary" onclick="IBMS.erp.customers.save()">Save Customer</button></div>
@@ -678,7 +678,7 @@
         <!-- ═══════════════════════════════════════════════════════════
              PAGE: PRODUCTS (ERP)
              ═══════════════════════════════════════════════════════════ -->
-        <main class="dashboard" id="page-products" style="display:none">
+        <main class="dashboard hidden" id="page-products">
             <div class="dashboard__header">
                 <h1 class="dashboard__title">Product Catalog</h1>
                 <p class="dashboard__subtitle">Manage products, pricing, and stock levels</p>
@@ -704,26 +704,26 @@
                     </div>
                 </section>
             </div>
-            <div class="modal-overlay" id="productModal" style="display:none">
+            <div class="modal-overlay hidden" id="productModal">
                 <div class="modal">
                     <div class="modal__header"><h3 id="productModalTitle">Add Product</h3><button class="modal__close" onclick="IBMS.erp.products.hideForm()">&times;</button></div>
                     <div class="modal__body">
                         <input type="hidden" id="productEditId">
                         <div class="form-grid-2">
-                            <div class="form-row"><label>Name *</label><input type="text" id="prodName" class="input--sm" required></div>
-                            <div class="form-row"><label>SKU *</label><input type="text" id="prodSku" class="input--sm" required></div>
+                            <div class="form-row"><label for="prodName">Name *</label><input type="text" id="prodName" class="input--sm" required></div>
+                            <div class="form-row"><label for="prodSku">SKU *</label><input type="text" id="prodSku" class="input--sm" required></div>
                         </div>
-                        <div class="form-row"><label>Category</label><input type="text" id="prodCategory" class="input--sm"></div>
+                        <div class="form-row"><label for="prodCategory">Category</label><input type="text" id="prodCategory" class="input--sm"></div>
                         <div class="form-grid-2">
-                            <div class="form-row"><label>Unit Price</label><input type="number" id="prodUnitPrice" step="0.01" class="input--sm"></div>
-                            <div class="form-row"><label>Cost Price</label><input type="number" id="prodCostPrice" step="0.01" class="input--sm"></div>
+                            <div class="form-row"><label for="prodUnitPrice">Unit Price</label><input type="number" id="prodUnitPrice" step="0.01" class="input--sm"></div>
+                            <div class="form-row"><label for="prodCostPrice">Cost Price</label><input type="number" id="prodCostPrice" step="0.01" class="input--sm"></div>
                         </div>
                         <div class="form-grid-2">
-                            <div class="form-row"><label>Tax Rate %</label><input type="number" id="prodTaxRate" step="0.01" value="0" class="input--sm"></div>
-                            <div class="form-row"><label>Stock Qty</label><input type="number" id="prodStock" value="0" class="input--sm"></div>
+                            <div class="form-row"><label for="prodTaxRate">Tax Rate %</label><input type="number" id="prodTaxRate" step="0.01" value="0" class="input--sm"></div>
+                            <div class="form-row"><label for="prodStock">Stock Qty</label><input type="number" id="prodStock" value="0" class="input--sm"></div>
                         </div>
-                        <div class="form-row"><label>Reorder Level</label><input type="number" id="prodReorder" value="10" class="input--sm"></div>
-                        <div class="form-row"><label>Description</label><textarea id="prodDesc" class="input--sm" rows="2"></textarea></div>
+                        <div class="form-row"><label for="prodReorder">Reorder Level</label><input type="number" id="prodReorder" value="10" class="input--sm"></div>
+                        <div class="form-row"><label for="prodDesc">Description</label><textarea id="prodDesc" class="input--sm" rows="2"></textarea></div>
                     </div>
                     <div class="modal__footer"><button class="btn btn--primary" onclick="IBMS.erp.products.save()">Save Product</button></div>
                 </div>
@@ -733,7 +733,7 @@
         <!-- ═══════════════════════════════════════════════════════════
              PAGE: ORDERS (ERP)
              ═══════════════════════════════════════════════════════════ -->
-        <main class="dashboard" id="page-orders" style="display:none">
+        <main class="dashboard hidden" id="page-orders">
             <div class="dashboard__header">
                 <h1 class="dashboard__title">Order Management</h1>
                 <p class="dashboard__subtitle">Track and manage sales orders</p>
@@ -744,7 +744,7 @@
                     <div class="panel__header">
                         <h2 class="panel__title">Orders</h2>
                         <div class="panel__actions">
-                            <select id="orderStatus" class="select--sm" onchange="IBMS.erp.orders.load()">
+                            <select id="orderStatus" class="select--sm" title="Order status" onchange="IBMS.erp.orders.load()">
                                 <option value="">All Status</option>
                                 <option value="draft">Draft</option>
                                 <option value="confirmed">Confirmed</option>
@@ -767,19 +767,19 @@
                     </div>
                 </section>
             </div>
-            <div class="modal-overlay" id="orderModal" style="display:none">
+            <div class="modal-overlay hidden" id="orderModal">
                 <div class="modal modal--lg">
                     <div class="modal__header"><h3>Create Order</h3><button class="modal__close" onclick="IBMS.erp.orders.hideForm()">&times;</button></div>
                     <div class="modal__body">
-                        <div class="form-row"><label>Customer *</label><select id="orderCustomer" class="select--sm"><option value="">Select customer…</option></select></div>
+                        <div class="form-row"><label for="orderCustomer">Customer *</label><select id="orderCustomer" class="select--sm"><option value="">Select customer…</option></select></div>
                         <div class="form-row">
                             <label>Order Items</label>
                             <div id="orderItemsList"></div>
-                            <button class="btn btn--sm" onclick="IBMS.erp.orders.addItemRow()" style="margin-top:var(--space-2)">+ Add Item</button>
+                            <button class="btn btn--sm mt-2" onclick="IBMS.erp.orders.addItemRow()">+ Add Item</button>
                         </div>
                         <div class="form-grid-2">
-                            <div class="form-row"><label>Discount Amount</label><input type="number" id="orderDiscount" value="0" step="0.01" class="input--sm"></div>
-                            <div class="form-row"><label>Notes</label><input type="text" id="orderNotes" class="input--sm"></div>
+                            <div class="form-row"><label for="orderDiscount">Discount Amount</label><input type="number" id="orderDiscount" value="0" step="0.01" class="input--sm"></div>
+                            <div class="form-row"><label for="orderNotes">Notes</label><input type="text" id="orderNotes" class="input--sm"></div>
                         </div>
                     </div>
                     <div class="modal__footer"><button class="btn btn--primary" onclick="IBMS.erp.orders.save()">Create Order</button></div>
@@ -790,7 +790,7 @@
         <!-- ═══════════════════════════════════════════════════════════
              PAGE: INVOICES (ERP)
              ═══════════════════════════════════════════════════════════ -->
-        <main class="dashboard" id="page-invoices" style="display:none">
+        <main class="dashboard hidden" id="page-invoices">
             <div class="dashboard__header">
                 <h1 class="dashboard__title">Invoice Management</h1>
                 <p class="dashboard__subtitle">Track invoices, payments, and receivables</p>
@@ -801,7 +801,7 @@
                     <div class="panel__header">
                         <h2 class="panel__title">Invoices</h2>
                         <div class="panel__actions">
-                            <select id="invoiceStatus" class="select--sm" onchange="IBMS.erp.invoices.load()">
+                            <select id="invoiceStatus" class="select--sm" title="Invoice status" onchange="IBMS.erp.invoices.load()">
                                 <option value="">All Status</option>
                                 <option value="draft">Draft</option>
                                 <option value="sent">Sent</option>
@@ -823,19 +823,19 @@
                     </div>
                 </section>
             </div>
-            <div class="modal-overlay" id="invoiceModal" style="display:none">
+            <div class="modal-overlay hidden" id="invoiceModal">
                 <div class="modal">
                     <div class="modal__header"><h3>Create Invoice</h3><button class="modal__close" onclick="IBMS.erp.invoices.hideForm()">&times;</button></div>
                     <div class="modal__body">
-                        <div class="form-row"><label>Customer *</label><select id="invoiceCustomer" class="select--sm"><option value="">Select customer…</option></select></div>
-                        <div class="form-row"><label>Order ID (optional)</label><input type="text" id="invoiceOrderId" class="input--sm"></div>
-                        <div class="form-row"><label>Due Date</label><input type="date" id="invoiceDueDate" class="input--sm"></div>
+                        <div class="form-row"><label for="invoiceCustomer">Customer *</label><select id="invoiceCustomer" class="select--sm"><option value="">Select customer…</option></select></div>
+                        <div class="form-row"><label for="invoiceOrderId">Order ID (optional)</label><input type="text" id="invoiceOrderId" class="input--sm"></div>
+                        <div class="form-row"><label for="invoiceDueDate">Due Date</label><input type="date" id="invoiceDueDate" class="input--sm"></div>
                         <div class="form-grid-2">
-                            <div class="form-row"><label>Subtotal</label><input type="number" id="invoiceSubtotal" step="0.01" class="input--sm"></div>
-                            <div class="form-row"><label>Tax Amount</label><input type="number" id="invoiceTax" step="0.01" class="input--sm"></div>
+                            <div class="form-row"><label for="invoiceSubtotal">Subtotal</label><input type="number" id="invoiceSubtotal" step="0.01" class="input--sm"></div>
+                            <div class="form-row"><label for="invoiceTax">Tax Amount</label><input type="number" id="invoiceTax" step="0.01" class="input--sm"></div>
                         </div>
-                        <div class="form-row"><label>Total Amount</label><input type="number" id="invoiceTotal" step="0.01" class="input--sm"></div>
-                        <div class="form-row"><label>Notes</label><textarea id="invoiceNotes" class="input--sm" rows="2"></textarea></div>
+                        <div class="form-row"><label for="invoiceTotal">Total Amount</label><input type="number" id="invoiceTotal" step="0.01" class="input--sm"></div>
+                        <div class="form-row"><label for="invoiceNotes">Notes</label><textarea id="invoiceNotes" class="input--sm" rows="2"></textarea></div>
                     </div>
                     <div class="modal__footer"><button class="btn btn--primary" onclick="IBMS.erp.invoices.save()">Create Invoice</button></div>
                 </div>
@@ -845,7 +845,7 @@
         <!-- ═══════════════════════════════════════════════════════════
              PAGE: INVENTORY (ERP)
              ═══════════════════════════════════════════════════════════ -->
-        <main class="dashboard" id="page-inventory" style="display:none">
+        <main class="dashboard hidden" id="page-inventory">
             <div class="dashboard__header">
                 <h1 class="dashboard__title">Inventory Management</h1>
                 <p class="dashboard__subtitle">Track stock levels, movements, and reorder alerts</p>
@@ -865,10 +865,10 @@
                 <section class="panel">
                     <div class="panel__header"><h2 class="panel__title">Record Movement</h2></div>
                     <div class="panel__body tool-form">
-                        <div class="form-row"><label>Product</label><select id="invProduct" class="select--sm"><option value="">Select…</option></select></div>
-                        <div class="form-row"><label>Type</label><select id="invType" class="select--sm"><option value="purchase">Purchase</option><option value="sale">Sale</option><option value="return">Return</option><option value="adjustment">Adjustment</option><option value="transfer">Transfer</option></select></div>
-                        <div class="form-row"><label>Quantity</label><input type="number" id="invQty" value="1" class="input--sm"></div>
-                        <div class="form-row"><label>Notes</label><input type="text" id="invNotes" class="input--sm"></div>
+                        <div class="form-row"><label for="invProduct">Product</label><select id="invProduct" class="select--sm"><option value="">Select…</option></select></div>
+                        <div class="form-row"><label for="invType">Type</label><select id="invType" class="select--sm"><option value="purchase">Purchase</option><option value="sale">Sale</option><option value="return">Return</option><option value="adjustment">Adjustment</option><option value="transfer">Transfer</option></select></div>
+                        <div class="form-row"><label for="invQty">Quantity</label><input type="number" id="invQty" value="1" class="input--sm"></div>
+                        <div class="form-row"><label for="invNotes">Notes</label><input type="text" id="invNotes" class="input--sm"></div>
                         <button class="btn btn--primary" onclick="IBMS.erp.inventory.recordMovement()">Record</button>
                         <div class="result-box" id="invResult"></div>
                     </div>
@@ -879,7 +879,7 @@
         <!-- ═══════════════════════════════════════════════════════════
              PAGE: EMPLOYEES (ERP)
              ═══════════════════════════════════════════════════════════ -->
-        <main class="dashboard" id="page-employees" style="display:none">
+        <main class="dashboard hidden" id="page-employees">
             <div class="dashboard__header">
                 <h1 class="dashboard__title">HR & Employee Management</h1>
                 <p class="dashboard__subtitle">Manage workforce, departments, and payroll</p>
@@ -891,7 +891,7 @@
                         <h2 class="panel__title">Employees</h2>
                         <div class="panel__actions">
                             <input type="text" id="employeeSearch" placeholder="Search employees…" class="input--sm" onkeyup="IBMS.erp.employees.load()">
-                            <select id="employeeDept" class="select--sm" onchange="IBMS.erp.employees.load()">
+                            <select id="employeeDept" class="select--sm" title="Employee department" onchange="IBMS.erp.employees.load()">
                                 <option value="">All Departments</option>
                                 <option value="Engineering">Engineering</option>
                                 <option value="Sales">Sales</option>
@@ -914,27 +914,27 @@
                     </div>
                 </section>
             </div>
-            <div class="modal-overlay" id="employeeModal" style="display:none">
+            <div class="modal-overlay hidden" id="employeeModal">
                 <div class="modal">
                     <div class="modal__header"><h3 id="employeeModalTitle">Add Employee</h3><button class="modal__close" onclick="IBMS.erp.employees.hideForm()">&times;</button></div>
                     <div class="modal__body">
                         <input type="hidden" id="employeeEditId">
                         <div class="form-grid-2">
-                            <div class="form-row"><label>Employee Code *</label><input type="text" id="empCode" class="input--sm" required></div>
-                            <div class="form-row"><label>Email *</label><input type="email" id="empEmail" class="input--sm" required></div>
+                            <div class="form-row"><label for="empCode">Employee Code *</label><input type="text" id="empCode" class="input--sm" required></div>
+                            <div class="form-row"><label for="empEmail">Email *</label><input type="email" id="empEmail" class="input--sm" required></div>
                         </div>
                         <div class="form-grid-2">
-                            <div class="form-row"><label>First Name *</label><input type="text" id="empFirstName" class="input--sm" required></div>
-                            <div class="form-row"><label>Last Name *</label><input type="text" id="empLastName" class="input--sm" required></div>
+                            <div class="form-row"><label for="empFirstName">First Name *</label><input type="text" id="empFirstName" class="input--sm" required></div>
+                            <div class="form-row"><label for="empLastName">Last Name *</label><input type="text" id="empLastName" class="input--sm" required></div>
                         </div>
-                        <div class="form-row"><label>Phone</label><input type="text" id="empPhone" class="input--sm"></div>
+                        <div class="form-row"><label for="empPhone">Phone</label><input type="text" id="empPhone" class="input--sm"></div>
                         <div class="form-grid-2">
-                            <div class="form-row"><label>Department</label><input type="text" id="empDept" class="input--sm"></div>
-                            <div class="form-row"><label>Position</label><input type="text" id="empPosition" class="input--sm"></div>
+                            <div class="form-row"><label for="empDept">Department</label><input type="text" id="empDept" class="input--sm"></div>
+                            <div class="form-row"><label for="empPosition">Position</label><input type="text" id="empPosition" class="input--sm"></div>
                         </div>
                         <div class="form-grid-2">
-                            <div class="form-row"><label>Salary</label><input type="number" id="empSalary" step="0.01" class="input--sm"></div>
-                            <div class="form-row"><label>Hire Date</label><input type="date" id="empHireDate" class="input--sm"></div>
+                            <div class="form-row"><label for="empSalary">Salary</label><input type="number" id="empSalary" step="0.01" class="input--sm"></div>
+                            <div class="form-row"><label for="empHireDate">Hire Date</label><input type="date" id="empHireDate" class="input--sm"></div>
                         </div>
                     </div>
                     <div class="modal__footer"><button class="btn btn--primary" onclick="IBMS.erp.employees.save()">Save Employee</button></div>
@@ -945,7 +945,7 @@
         <!-- ═══════════════════════════════════════════════════════════
              PAGE: EVENT STREAM
              ═══════════════════════════════════════════════════════════ -->
-        <main class="dashboard" id="page-events" style="display:none">
+        <main class="dashboard hidden" id="page-events">
             <div class="dashboard__header">
                 <h1 class="dashboard__title">Live Event Stream</h1>
                 <p class="dashboard__subtitle">Real-time system events and activity log</p>
@@ -957,7 +957,7 @@
                         <span class="badge" id="eventCount">0 events</span>
                     </div>
                     <div class="panel__body">
-                        <div class="event-log" id="eventLog" style="max-height:500px">
+                        <div class="event-log scroll-box-lg" id="eventLog">
                             <div class="event-log__empty">Waiting for real-time events.</div>
                         </div>
                     </div>
@@ -968,7 +968,7 @@
         <!-- ═══════════════════════════════════════════════════════════
              PAGE: SYSTEM HEALTH
              ═══════════════════════════════════════════════════════════ -->
-        <main class="dashboard" id="page-system" style="display:none">
+        <main class="dashboard hidden" id="page-system">
             <div class="dashboard__header">
                 <h1 class="dashboard__title">System Health Monitor</h1>
                 <p class="dashboard__subtitle">Infrastructure status and performance metrics</p>
@@ -993,7 +993,7 @@
                 <section class="panel panel--full">
                     <div class="panel__header"><h2 class="panel__title">API Status</h2></div>
                     <div class="panel__body">
-                        <div class="result-box" id="apiStatusResult" style="max-height:400px">Loading system details.</div>
+                        <div class="result-box scroll-box-md" id="apiStatusResult">Loading system details.</div>
                     </div>
                 </section>
             </div>
@@ -1002,7 +1002,7 @@
         <!-- ═══════════════════════════════════════════════════════════
              PAGE: AUDIT LOG
              ═══════════════════════════════════════════════════════════ -->
-        <main class="dashboard" id="page-audit" style="display:none">
+        <main class="dashboard hidden" id="page-audit">
             <div class="dashboard__header">
                 <h1 class="dashboard__title">Security Audit Log</h1>
                 <p class="dashboard__subtitle">Complete audit trail for all authentication and security events</p>
@@ -1014,7 +1014,7 @@
                         <button class="btn btn--sm" onclick="IBMS.audit.load()">Refresh</button>
                     </div>
                     <div class="panel__body">
-                        <div class="event-log" id="auditLog" style="max-height:500px">
+                        <div class="event-log scroll-box-lg" id="auditLog">
                             <div class="event-log__empty">Loading audit log.</div>
                         </div>
                     </div>

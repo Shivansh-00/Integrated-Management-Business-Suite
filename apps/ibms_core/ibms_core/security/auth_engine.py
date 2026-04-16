@@ -54,7 +54,10 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed: str) -> bool:
     """Verify password against hash."""
     if _HAS_BCRYPT and hashed.startswith("$2"):
-        return bcrypt.checkpw(password.encode(), hashed.encode())
+        try:
+            return bcrypt.checkpw(password.encode(), hashed.encode())
+        except (ValueError, TypeError):
+            return False
     if hashed.startswith("pbkdf2:"):
         _, salt_b64, key_b64 = hashed.split(":")
         salt = b64decode(salt_b64)
@@ -481,7 +484,7 @@ def check_rate_limit(key: str) -> dict:
         return {"allowed": True, "attempts": 0, "remaining": MAX_LOGIN_ATTEMPTS}
     except Exception:
         # Fallback to in-memory
-        mark_sync_mongo_down()
+        mark_sync_supabase_down()
         entry = _rate_limits_fallback[key]
         if entry.locked_until > now:
             remaining = int(entry.locked_until - now)
@@ -574,12 +577,12 @@ class User:
 
 
 # ---------------------------------------------------------------------------
-# MongoDB-backed User Store
+# Supabase-backed User Store
 # ---------------------------------------------------------------------------
 from ibms_core.database.models import UserOps, AuditOps, RefreshTokenOps, RateLimitOps, CSRFOps
-from ibms_core.database.connection import mark_sync_mongo_down
+from ibms_core.database.supabase_connection import mark_sync_supabase_down
 
-# In-memory fallback caches (used only when MongoDB is unreachable)
+# In-memory fallback caches (used only when Supabase is unreachable)
 _users_fallback: dict[str, dict] = {}
 _user_by_username_fallback: dict[str, str] = {}
 _user_by_email_fallback: dict[str, str] = {}
@@ -631,8 +634,8 @@ def _init_default_users():
                 is_verified=True,
             )
     except Exception:
-        # MongoDB not available yet — create in-memory fallback
-        mark_sync_mongo_down()
+        # Supabase not available yet — create in-memory fallback
+        mark_sync_supabase_down()
         if "admin" not in _user_by_username_fallback:
             admin_id = str(uuid.uuid4())
             _users_fallback[admin_id] = {

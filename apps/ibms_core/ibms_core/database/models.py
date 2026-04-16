@@ -1,17 +1,19 @@
 """
-MongoDB CRUD Operations for all IBMS collections.
-===================================================
+Supabase CRUD Operations for all IBMS collections.
+=====================================================
 Async operations for FastAPI endpoints.
 Sync operations for auth_engine, background jobs.
+Uses Supabase PostgREST client (replaces MongoDB).
 """
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from ibms_core.database.connection import get_collection, get_sync_collection
+from ibms_core.database.supabase_connection import get_supabase_sync, get_supabase_async
 
 
 # ===================================================================
@@ -26,16 +28,12 @@ def _new_id() -> str:
     return str(uuid.uuid4())
 
 
-def _serialize_doc(doc: dict | None) -> dict | None:
-    """Convert MongoDB _id to string for JSON serialization."""
-    if doc is None:
-        return None
-    doc["_id"] = str(doc["_id"])
-    return doc
-
-
-def _serialize_docs(docs: list[dict]) -> list[dict]:
-    return [_serialize_doc(d) for d in docs]
+def _first_or_none(response) -> dict | None:
+    """Extract the first row from a Supabase response or return None."""
+    data = response.data
+    if data and len(data) > 0:
+        return data[0]
+    return None
 
 
 # ===================================================================
@@ -46,8 +44,8 @@ class UserOps:
     """Sync user operations for auth_engine."""
 
     @staticmethod
-    def col():
-        return get_sync_collection("users")
+    def _table():
+        return get_supabase_sync().table("users")
 
     @staticmethod
     def create(*, email: str, username: str, password_hash: str, role: str = "viewer",
@@ -68,72 +66,75 @@ class UserOps:
             "failed_attempts": 0,
         }
         try:
-            UserOps.col().insert_one(doc)
+            result = UserOps._table().insert(doc).execute()
+            return result.data[0] if result.data else doc
         except Exception as e:
-            if "DuplicateKeyError" in type(e).__name__ or "11000" in str(e):
-                # User already exists — return existing
+            err_str = str(e)
+            if "duplicate" in err_str.lower() or "23505" in err_str:
                 existing = UserOps.find_by_username(username) or UserOps.find_by_email(email)
                 if existing:
                     return existing
             raise
-        return doc
 
     @staticmethod
     def find_by_username(username: str) -> dict | None:
-        doc = UserOps.col().find_one({"username": username})
-        return _serialize_doc(doc) if doc else None
+        result = UserOps._table().select("*").eq("username", username).limit(1).execute()
+        return _first_or_none(result)
 
     @staticmethod
     def find_by_email(email: str) -> dict | None:
-        doc = UserOps.col().find_one({"email": email})
-        return _serialize_doc(doc) if doc else None
+        result = UserOps._table().select("*").eq("email", email).limit(1).execute()
+        return _first_or_none(result)
 
     @staticmethod
     def find_by_id(user_id: str) -> dict | None:
-        doc = UserOps.col().find_one({"user_id": user_id})
-        return _serialize_doc(doc) if doc else None
+        result = UserOps._table().select("*").eq("user_id", user_id).limit(1).execute()
+        return _first_or_none(result)
 
     @staticmethod
     def find_by_username_or_email(identifier: str) -> dict | None:
-        doc = UserOps.col().find_one({"$or": [{"username": identifier}, {"email": identifier}]})
-        return _serialize_doc(doc) if doc else None
+        result = UserOps._table().select("*").or_(f"username.eq.{identifier},email.eq.{identifier}").limit(1).execute()
+        return _first_or_none(result)
 
     @staticmethod
     def update(user_id: str, updates: dict):
-        UserOps.col().update_one({"user_id": user_id}, {"$set": updates})
+        UserOps._table().update(updates).eq("user_id", user_id).execute()
 
     @staticmethod
     def set_totp(user_id: str, secret: str | None, enabled: bool):
-        UserOps.col().update_one(
-            {"user_id": user_id},
-            {"$set": {"totp_secret": secret, "totp_enabled": enabled}},
-        )
+        UserOps._table().update({
+            "totp_secret": secret,
+            "totp_enabled": enabled,
+        }).eq("user_id", user_id).execute()
 
     @staticmethod
     def record_login(user_id: str):
-        UserOps.col().update_one(
-            {"user_id": user_id},
-            {"$set": {"last_login": _now_iso(), "failed_attempts": 0}},
-        )
+        UserOps._table().update({
+            "last_login": _now_iso(),
+            "failed_attempts": 0,
+        }).eq("user_id", user_id).execute()
 
     @staticmethod
     def increment_failed_attempts(user_id: str):
-        UserOps.col().update_one(
-            {"user_id": user_id},
-            {"$inc": {"failed_attempts": 1}},
-        )
+        user = UserOps.find_by_id(user_id)
+        if user:
+            new_count = user.get("failed_attempts", 0) + 1
+            UserOps._table().update({"failed_attempts": new_count}).eq("user_id", user_id).execute()
 
     @staticmethod
     def exists_by_username(username: str) -> bool:
-        return UserOps.col().count_documents({"username": username}, limit=1) > 0
+        result = UserOps._table().select("user_id", count="exact").eq("username", username).limit(1).execute()
+        return (result.count or 0) > 0
 
     @staticmethod
     def exists_by_email(email: str) -> bool:
-        return UserOps.col().count_documents({"email": email}, limit=1) > 0
+        result = UserOps._table().select("user_id", count="exact").eq("email", email).limit(1).execute()
+        return (result.count or 0) > 0
 
     @staticmethod
     def count() -> int:
-        return UserOps.col().count_documents({})
+        result = UserOps._table().select("user_id", count="exact").execute()
+        return result.count or 0
 
 
 # ===================================================================
@@ -144,8 +145,8 @@ class AuditOps:
     """Sync audit log operations."""
 
     @staticmethod
-    def col():
-        return get_sync_collection("audit_logs")
+    def _table():
+        return get_supabase_sync().table("audit_logs")
 
     @staticmethod
     def create(event_type: str, user_id: str = "", ip: str = "", details: dict | None = None) -> dict:
@@ -157,16 +158,16 @@ class AuditOps:
             "timestamp": _now_iso(),
             "details": details or {},
         }
-        AuditOps.col().insert_one(doc)
-        return doc
+        result = AuditOps._table().insert(doc).execute()
+        return result.data[0] if result.data else doc
 
     @staticmethod
     def find(limit: int = 100, event_type: str = "") -> list[dict]:
-        query = {}
+        q = AuditOps._table().select("*").order("timestamp", desc=True).limit(limit)
         if event_type:
-            query["event_type"] = event_type
-        cursor = AuditOps.col().find(query).sort("timestamp", -1).limit(limit)
-        return _serialize_docs(list(cursor))
+            q = q.eq("event_type", event_type)
+        result = q.execute()
+        return result.data or []
 
 
 # ===================================================================
@@ -177,8 +178,8 @@ class RefreshTokenOps:
     """Sync refresh token operations."""
 
     @staticmethod
-    def col():
-        return get_sync_collection("refresh_tokens")
+    def _table():
+        return get_supabase_sync().table("refresh_tokens")
 
     @staticmethod
     def create(token: str, user_id: str, device_fp: str = "", family: str = "") -> dict:
@@ -188,36 +189,37 @@ class RefreshTokenOps:
             "user_id": user_id,
             "device_fp": device_fp,
             "issued_at": int(time.time()),
-            "expires_at": datetime.fromtimestamp(int(time.time()) + 604800, tz=timezone.utc),
+            "expires_at": datetime.fromtimestamp(int(time.time()) + 604800, tz=timezone.utc).isoformat(),
             "family": family or _new_id(),
             "revoked": False,
         }
-        RefreshTokenOps.col().insert_one(doc)
-        return doc
+        result = RefreshTokenOps._table().insert(doc).execute()
+        return result.data[0] if result.data else doc
 
     @staticmethod
     def find_by_token(token: str) -> dict | None:
-        doc = RefreshTokenOps.col().find_one({"token": token, "revoked": False})
-        return _serialize_doc(doc) if doc else None
+        result = RefreshTokenOps._table().select("*").eq("token", token).eq("revoked", False).limit(1).execute()
+        return _first_or_none(result)
 
     @staticmethod
     def revoke(token: str):
-        RefreshTokenOps.col().update_one({"token": token}, {"$set": {"revoked": True}})
+        RefreshTokenOps._table().update({"revoked": True}).eq("token", token).execute()
 
     @staticmethod
     def revoke_family(family: str):
-        RefreshTokenOps.col().update_many({"family": family}, {"$set": {"revoked": True}})
+        RefreshTokenOps._table().update({"revoked": True}).eq("family", family).execute()
 
     @staticmethod
     def revoke_all_for_user(user_id: str):
-        RefreshTokenOps.col().update_many({"user_id": user_id}, {"$set": {"revoked": True}})
+        RefreshTokenOps._table().update({"revoked": True}).eq("user_id", user_id).execute()
 
     @staticmethod
     def is_revoked(token: str) -> bool:
-        doc = RefreshTokenOps.col().find_one({"token": token})
-        if doc is None:
+        result = RefreshTokenOps._table().select("revoked").eq("token", token).limit(1).execute()
+        row = _first_or_none(result)
+        if row is None:
             return False
-        return doc.get("revoked", False)
+        return row.get("revoked", False)
 
 
 # ===================================================================
@@ -228,43 +230,40 @@ class RateLimitOps:
     """Sync rate limit operations."""
 
     @staticmethod
-    def col():
-        return get_sync_collection("rate_limits")
+    def _table():
+        return get_supabase_sync().table("rate_limits")
 
     @staticmethod
     def get(key: str) -> dict | None:
-        doc = RateLimitOps.col().find_one({"key": key})
-        return _serialize_doc(doc) if doc else None
+        result = RateLimitOps._table().select("*").eq("key", key).limit(1).execute()
+        return _first_or_none(result)
 
     @staticmethod
     def upsert(key: str, updates: dict):
-        RateLimitOps.col().update_one(
-            {"key": key},
-            {"$set": updates},
-            upsert=True,
-        )
+        updates["key"] = key
+        RateLimitOps._table().upsert(updates, on_conflict="key").execute()
 
     @staticmethod
     def increment_attempts(key: str, first_attempt: float):
-        RateLimitOps.col().update_one(
-            {"key": key},
-            {
-                "$inc": {"attempts": 1},
-                "$setOnInsert": {"key": key, "first_attempt": first_attempt, "locked_until": 0},
-            },
-            upsert=True,
-        )
+        existing = RateLimitOps.get(key)
+        if existing:
+            new_attempts = existing.get("attempts", 0) + 1
+            RateLimitOps._table().update({"attempts": new_attempts}).eq("key", key).execute()
+        else:
+            RateLimitOps._table().insert({
+                "key": key,
+                "attempts": 1,
+                "first_attempt": first_attempt,
+                "locked_until": 0,
+            }).execute()
 
     @staticmethod
     def lock(key: str, locked_until: float):
-        RateLimitOps.col().update_one(
-            {"key": key},
-            {"$set": {"locked_until": locked_until}},
-        )
+        RateLimitOps._table().update({"locked_until": locked_until}).eq("key", key).execute()
 
     @staticmethod
     def reset(key: str):
-        RateLimitOps.col().delete_one({"key": key})
+        RateLimitOps._table().delete().eq("key", key).execute()
 
 
 # ===================================================================
@@ -275,30 +274,35 @@ class CSRFOps:
     """Sync CSRF token operations."""
 
     @staticmethod
-    def col():
-        return get_sync_collection("csrf_tokens")
+    def _table():
+        return get_supabase_sync().table("csrf_tokens")
 
     @staticmethod
     def create(token: str, expires_at: float):
-        CSRFOps.col().insert_one({
+        CSRFOps._table().insert({
             "token": token,
-            "expires_at": datetime.fromtimestamp(expires_at, tz=timezone.utc),
-        })
+            "expires_at": datetime.fromtimestamp(expires_at, tz=timezone.utc).isoformat(),
+        }).execute()
 
     @staticmethod
     def validate(token: str) -> bool:
         import time
-        doc = CSRFOps.col().find_one({"token": token})
-        if not doc:
+        result = CSRFOps._table().select("expires_at").eq("token", token).limit(1).execute()
+        row = _first_or_none(result)
+        if not row:
             return False
-        exp = doc.get("expires_at")
-        if isinstance(exp, datetime):
-            return exp.timestamp() > time.time()
+        exp = row.get("expires_at")
+        if exp:
+            try:
+                exp_dt = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+                return exp_dt.timestamp() > time.time()
+            except (ValueError, TypeError):
+                return False
         return False
 
     @staticmethod
     def delete(token: str):
-        CSRFOps.col().delete_one({"token": token})
+        CSRFOps._table().delete().eq("token", token).execute()
 
 
 # ===================================================================
@@ -309,37 +313,42 @@ class KPIOps:
     """Async KPI snapshot operations."""
 
     @staticmethod
-    def col():
-        return get_collection("kpi_snapshots")
-
-    @staticmethod
-    def latest_col():
-        return get_collection("kpi_latest")
-
-    @staticmethod
     async def save_snapshot(kpi: dict):
-        kpi_doc = {**kpi, "snapshot_id": _new_id(), "recorded_at": _now_iso()}
-        await KPIOps.col().insert_one(kpi_doc)
+        sb = get_supabase_async()
+        snapshot_id = _new_id()
+        recorded_at = _now_iso()
+        company = kpi.get("company", "Default Company")
+        # Store full KPI in the data JSONB column
+        kpi_doc = {
+            "snapshot_id": snapshot_id,
+            "company": company,
+            "recorded_at": recorded_at,
+            "data": kpi,
+        }
+        await sb.table("kpi_snapshots").insert(kpi_doc).execute()
         # Upsert latest for fast dashboard read
-        await KPIOps.latest_col().update_one(
-            {"company": kpi["company"]},
-            {"$set": kpi},
-            upsert=True,
-        )
+        await sb.table("kpi_latest").upsert({
+            "company": company,
+            "data": kpi,
+        }, on_conflict="company").execute()
 
     @staticmethod
     async def get_latest(company: str) -> dict | None:
-        doc = await KPIOps.latest_col().find_one({"company": company})
-        return _serialize_doc(doc) if doc else None
+        sb = get_supabase_async()
+        result = await sb.table("kpi_latest").select("*").eq("company", company).limit(1).execute()
+        row = result.data[0] if result.data else None
+        if row and "data" in row:
+            return row["data"]
+        return row
 
     @staticmethod
     async def get_history(limit: int = 50, company: str | None = None) -> list[dict]:
-        query = {}
+        sb = get_supabase_async()
+        q = sb.table("kpi_snapshots").select("*").order("recorded_at", desc=True).limit(limit)
         if company:
-            query["company"] = company
-        cursor = KPIOps.col().find(query).sort("recorded_at", -1).limit(limit)
-        docs = await cursor.to_list(length=limit)
-        return _serialize_docs(docs)
+            q = q.eq("company", company)
+        result = await q.execute()
+        return result.data or []
 
 
 # ===================================================================
@@ -350,12 +359,9 @@ class AIRecommendationOps:
     """Async AI recommendation operations."""
 
     @staticmethod
-    def col():
-        return get_collection("ai_recommendations")
-
-    @staticmethod
     async def create(*, company: str, context_type: str, recommendation_code: str,
                      confidence: float, payload: dict, status: str = "Open") -> dict:
+        sb = get_supabase_async()
         doc = {
             "rec_id": _new_id(),
             "company": company,
@@ -366,22 +372,22 @@ class AIRecommendationOps:
             "payload": payload,
             "generated_at": _now_iso(),
         }
-        await AIRecommendationOps.col().insert_one(doc)
-        return doc
+        result = await sb.table("ai_recommendations").insert(doc).execute()
+        return result.data[0] if result.data else doc
 
     @staticmethod
     async def find_by_company(company: str, status: str = "", limit: int = 50) -> list[dict]:
-        query: dict = {"company": company}
+        sb = get_supabase_async()
+        q = sb.table("ai_recommendations").select("*").eq("company", company).order("generated_at", desc=True).limit(limit)
         if status:
-            query["status"] = status
-        cursor = AIRecommendationOps.col().find(query).sort("generated_at", -1).limit(limit)
-        return _serialize_docs(await cursor.to_list(length=limit))
+            q = q.eq("status", status)
+        result = await q.execute()
+        return result.data or []
 
     @staticmethod
     async def update_status(rec_id: str, status: str):
-        await AIRecommendationOps.col().update_one(
-            {"rec_id": rec_id}, {"$set": {"status": status}}
-        )
+        sb = get_supabase_async()
+        await sb.table("ai_recommendations").update({"status": status}).eq("rec_id", rec_id).execute()
 
 
 # ===================================================================
@@ -392,21 +398,21 @@ class ProfileOps:
     """Async enterprise profile operations."""
 
     @staticmethod
-    def col():
-        return get_collection("enterprise_profiles")
-
-    @staticmethod
     async def upsert(user_id: str, data: dict):
-        await ProfileOps.col().update_one(
-            {"user_id": user_id},
-            {"$set": {**data, "user_id": user_id}},
-            upsert=True,
-        )
+        sb = get_supabase_async()
+        await sb.table("enterprise_profiles").upsert({
+            "user_id": user_id,
+            "data": data,
+        }, on_conflict="user_id").execute()
 
     @staticmethod
     async def find_by_user(user_id: str) -> dict | None:
-        doc = await ProfileOps.col().find_one({"user_id": user_id})
-        return _serialize_doc(doc) if doc else None
+        sb = get_supabase_async()
+        result = await sb.table("enterprise_profiles").select("*").eq("user_id", user_id).limit(1).execute()
+        row = result.data[0] if result.data else None
+        if row and "data" in row:
+            return {**row["data"], "user_id": user_id}
+        return row
 
 
 # ===================================================================
@@ -417,12 +423,9 @@ class WebhookLogOps:
     """Async webhook log operations."""
 
     @staticmethod
-    def col():
-        return get_collection("webhook_logs")
-
-    @staticmethod
     async def create(*, provider: str, event_type: str, signature: str,
                      request_body: str, http_status: int = 200) -> dict:
+        sb = get_supabase_async()
         doc = {
             "log_id": _new_id(),
             "provider": provider,
@@ -434,20 +437,22 @@ class WebhookLogOps:
             "response_body": "",
             "received_at": _now_iso(),
         }
-        await WebhookLogOps.col().insert_one(doc)
-        return doc
+        result = await sb.table("webhook_logs").insert(doc).execute()
+        return result.data[0] if result.data else doc
 
     @staticmethod
     async def mark_processed(log_id: str, response_body: str = ""):
-        await WebhookLogOps.col().update_one(
-            {"log_id": log_id},
-            {"$set": {"processed": True, "response_body": response_body}},
-        )
+        sb = get_supabase_async()
+        await sb.table("webhook_logs").update({
+            "processed": True,
+            "response_body": response_body,
+        }).eq("log_id", log_id).execute()
 
     @staticmethod
     async def find_unprocessed(limit: int = 100) -> list[dict]:
-        cursor = WebhookLogOps.col().find({"processed": False}).sort("received_at", 1).limit(limit)
-        return _serialize_docs(await cursor.to_list(length=limit))
+        sb = get_supabase_async()
+        result = await sb.table("webhook_logs").select("*").eq("processed", False).order("received_at", desc=False).limit(limit).execute()
+        return result.data or []
 
 
 # ===================================================================
@@ -458,12 +463,9 @@ class DecisionRuleOps:
     """Async smart decision rule operations."""
 
     @staticmethod
-    def col():
-        return get_collection("smart_decision_rules")
-
-    @staticmethod
     async def create(*, rule_name: str, module: str, threshold: float = 50.0,
                      is_enabled: bool = True) -> dict:
+        sb = get_supabase_async()
         doc = {
             "rule_id": _new_id(),
             "rule_name": rule_name,
@@ -471,16 +473,17 @@ class DecisionRuleOps:
             "threshold": threshold,
             "is_enabled": is_enabled,
         }
-        await DecisionRuleOps.col().insert_one(doc)
-        return doc
+        result = await sb.table("smart_decision_rules").insert(doc).execute()
+        return result.data[0] if result.data else doc
 
     @staticmethod
     async def find_enabled(module: str = "") -> list[dict]:
-        query: dict = {"is_enabled": True}
+        sb = get_supabase_async()
+        q = sb.table("smart_decision_rules").select("*").eq("is_enabled", True)
         if module:
-            query["module"] = module
-        cursor = DecisionRuleOps.col().find(query)
-        return _serialize_docs(await cursor.to_list(length=500))
+            q = q.eq("module", module)
+        result = await q.execute()
+        return result.data or []
 
 
 # ===================================================================
@@ -491,12 +494,9 @@ class AlertOps:
     """Async AI alert operations."""
 
     @staticmethod
-    def col():
-        return get_collection("ai_alerts")
-
-    @staticmethod
     async def create(*, title: str, severity: str, reference_doctype: str = "",
                      reference_name: str = "", risk_score: float = 0) -> dict:
+        sb = get_supabase_async()
         doc = {
             "alert_id": _new_id(),
             "title": title,
@@ -507,19 +507,19 @@ class AlertOps:
             "risk_score": risk_score,
             "created_at": _now_iso(),
         }
-        await AlertOps.col().insert_one(doc)
-        return doc
+        result = await sb.table("ai_alerts").insert(doc).execute()
+        return result.data[0] if result.data else doc
 
     @staticmethod
     async def find_active(limit: int = 50) -> list[dict]:
-        cursor = AlertOps.col().find({"status": "Open"}).sort("created_at", -1).limit(limit)
-        return _serialize_docs(await cursor.to_list(length=limit))
+        sb = get_supabase_async()
+        result = await sb.table("ai_alerts").select("*").eq("status", "Open").order("created_at", desc=True).limit(limit).execute()
+        return result.data or []
 
     @staticmethod
     async def resolve(alert_id: str):
-        await AlertOps.col().update_one(
-            {"alert_id": alert_id}, {"$set": {"status": "Resolved"}}
-        )
+        sb = get_supabase_async()
+        await sb.table("ai_alerts").update({"status": "Resolved"}).eq("alert_id", alert_id).execute()
 
 
 # ===================================================================
@@ -530,12 +530,9 @@ class NotificationOps:
     """Async notification operations."""
 
     @staticmethod
-    def col():
-        return get_collection("notifications")
-
-    @staticmethod
     async def create(*, title: str, message: str, level: str = "info",
                      target_user: str = "") -> dict:
+        sb = get_supabase_async()
         doc = {
             "notif_id": _new_id(),
             "title": title,
@@ -545,19 +542,19 @@ class NotificationOps:
             "read": False,
             "timestamp": _now_iso(),
         }
-        await NotificationOps.col().insert_one(doc)
-        return doc
+        result = await sb.table("notifications").insert(doc).execute()
+        return result.data[0] if result.data else doc
 
     @staticmethod
     async def find_recent(limit: int = 50, user_id: str = "") -> list[dict]:
-        query: dict = {}
+        sb = get_supabase_async()
+        q = sb.table("notifications").select("*").order("timestamp", desc=True).limit(limit)
         if user_id:
-            query["$or"] = [{"target_user": user_id}, {"target_user": ""}]
-        cursor = NotificationOps.col().find(query).sort("timestamp", -1).limit(limit)
-        return _serialize_docs(await cursor.to_list(length=limit))
+            q = q.or_(f"target_user.eq.{user_id},target_user.eq.")
+        result = await q.execute()
+        return result.data or []
 
     @staticmethod
     async def mark_read(notif_id: str):
-        await NotificationOps.col().update_one(
-            {"notif_id": notif_id}, {"$set": {"read": True}}
-        )
+        sb = get_supabase_async()
+        await sb.table("notifications").update({"read": True}).eq("notif_id", notif_id).execute()

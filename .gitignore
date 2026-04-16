@@ -9,3 +9,7 @@ $null
 deploy_log.txt
 .vscode/
 deploy/gcp/*_log.txt
+server_output.log
+login_resp.json
+token.txt
+*.log

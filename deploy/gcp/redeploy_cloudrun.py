@@ -14,9 +14,10 @@ SQL_INSTANCE = "ibms-mysql"
 REDIS_INSTANCE = "ibms-redis"
 SERVICE_NAME = "ibms-web"
 REPO_NAME = "ibms-docker"
-SECRET_KEY = "ibms-secret-key-change-in-production"
-DB_USER_PASSWORD = "ibms_secure_pw_2025"
-MONGO_URI = os.getenv("MONGO_URI", "")
+SECRET_KEY = os.getenv("SECRET_KEY", "ibms-secret-key-change-in-production")
+JWT_SECRET = os.getenv("JWT_SECRET", SECRET_KEY)
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
 SQL_URL = "https://sqladmin.googleapis.com/v1"
 REDIS_URL_API = "https://redis.googleapis.com/v1"
@@ -179,7 +180,7 @@ def fetch_logs():
     else:
         print(f"    Failed to fetch logs: {resp.status_code}")
 
-def deploy_cloud_run(sql_ip, redis_host, redis_port):
+def deploy_cloud_run(redis_host, redis_port):
     print("\n[5] Deploying Cloud Run...")
     image = f"{REGION}-docker.pkg.dev/{PROJECT_ID}/{REPO_NAME}/ibms-web:latest"
     connector = f"projects/{PROJECT_ID}/locations/{REGION}/connectors/{CONNECTOR_NAME}"
@@ -200,13 +201,13 @@ def deploy_cloud_run(sql_ip, redis_host, redis_port):
                     {"name": "RELOAD", "value": "false"},
                     {"name": "LOG_LEVEL", "value": "warning"},
                     {"name": "SECRET_KEY", "value": SECRET_KEY},
+                    {"name": "JWT_SECRET", "value": JWT_SECRET},
                     {"name": "REDIS_URL", "value": f"redis://{redis_host}:{redis_port}/0"},
-                    {"name": "MARIADB_URI", "value": f"mysql+aiomysql://ibms_user:{DB_USER_PASSWORD}@{sql_ip}:3306/ibms_enterprise?connect_timeout=10"},
-                    {"name": "MONGO_URI", "value": MONGO_URI or "mongodb://localhost:27017"},
-                    {"name": "MONGO_DB_NAME", "value": "ibms_enterprise"},
+                    {"name": "SUPABASE_URL", "value": SUPABASE_URL},
+                    {"name": "SUPABASE_KEY", "value": SUPABASE_KEY},
                 ],
                 "startupProbe": {
-                    "httpGet": {"path": "/api/health"},
+                    "httpGet": {"path": "/api/health", "port": 8080},
                     "initialDelaySeconds": 10,
                     "periodSeconds": 10,
                     "failureThreshold": 15,
@@ -272,30 +273,14 @@ def main():
 
     authenticate()
 
-    # Step 1: Check Cloud SQL
-    state, sql_ip = check_cloud_sql()
-    if state != "RUNNABLE":
-        if state in ("PENDING_CREATE", "MAINTENANCE", "SUSPENDED"):
-            ok = wait_for_sql_runnable()
-            if not ok:
-                print("  Cloud SQL not ready — aborting")
-                return
-            _, sql_ip = check_cloud_sql()
-        else:
-            print(f"  Unexpected SQL state '{state}' — aborting")
-            return
-
-    # Step 2: Check Redis
+    # Step 1: Check Redis (Cloud SQL removed — using Supabase)
     redis_host, redis_port = check_redis()
 
-    # Step 3: Ensure DB/user
-    ensure_db_user(sql_ip)
-
-    # Step 3.5: Fetch existing logs from failed revision
+    # Step 2: Fetch existing logs
     fetch_logs()
 
-    # Step 4: Deploy
-    deploy_cloud_run(sql_ip, redis_host, redis_port)
+    # Step 3: Deploy
+    deploy_cloud_run(redis_host, redis_port)
 
 
 if __name__ == "__main__":

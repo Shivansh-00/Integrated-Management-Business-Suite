@@ -1,24 +1,19 @@
 """
-IBMS MongoDB Database Layer
-============================
-Async MongoDB connection via Motor for FastAPI integration.
-Sync PyMongo fallback for non-async contexts (auth_engine, jobs).
+IBMS Supabase Database Layer
+==============================
+Async + Sync Supabase client for FastAPI integration.
 """
 
-from ibms_core.database.connection import (
-    connect_db,
-    close_db,
-    get_db,
-    get_sync_db,
-    get_collection,
-    get_sync_collection,
+from ibms_core.database.supabase_connection import (
+    connect_supabase,
+    close_supabase,
+    get_supabase_async,
+    get_supabase_sync,
 )
 
 __all__ = [
-    "connect_db",
-    "close_db",
-    "get_db",
-    "get_sync_db",
-    "get_collection",
-    "get_sync_collection",
+    "connect_supabase",
+    "close_supabase",
+    "get_supabase_async",
+    "get_supabase_sync",
 ]

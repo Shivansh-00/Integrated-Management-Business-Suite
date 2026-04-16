@@ -81,12 +81,26 @@ for _ch in '\u258c\u2590':
     _UNICODE_MAP[_ch] = '|'
 _UNICODE_MAP['\u25a1'] = '[ ]'
 _UNICODE_MAP['\u25cb'] = 'o'
+_UNICODE_MAP['\u20b9'] = 'Rs.'   # ₹ Indian Rupee
+_UNICODE_MAP['\u2265'] = '>='    # ≥ greater-or-equal
+_UNICODE_MAP['\u2264'] = '<='    # ≤ less-or-equal
+_UNICODE_MAP['\u2260'] = '!='    # ≠ not-equal
+_UNICODE_MAP['\u25ba'] = '>'     # ► right pointer
+_UNICODE_MAP['\u25c0'] = '<'     # ◀ left pointer
+
+# Common emoji used in headings / table cells
+_EMOJI_RE = re.compile(
+    '[\U0001F100-\U0001F9FF\U00002702-\U000027B0\U0001FA00-\U0001FA6F'
+    '\U0001FA70-\U0001FAFF\U00002600-\U000026FF\U0000FE00-\U0000FE0F'
+    '\U0000200D]+'
+)
 
 
 def sanitize(text):
     """Replace Unicode chars outside latin-1 with ASCII equivalents."""
     for old, new in _UNICODE_MAP.items():
         text = text.replace(old, new)
+    text = _EMOJI_RE.sub('', text)
     out = []
     for ch in text:
         try:
@@ -99,6 +113,16 @@ def sanitize(text):
 
 def strip_md_bold(text):
     return re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
+
+
+def strip_md_inline(text):
+    """Strip all inline markdown: bold, italic, backtick code."""
+    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)   # bold **
+    text = re.sub(r'__([^_]+)__', r'\1', text)           # bold __
+    text = re.sub(r'`([^`]+)`', r'\1', text)             # code `
+    text = re.sub(r'\*([^*]+)\*', r'\1', text)          # italic *
+    text = re.sub(r'(?<!\w)_([^_]+)_(?!\w)', r'\1', text)  # italic _
+    return text
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -329,7 +353,7 @@ def write_inline(pdf, text, size=10):
     text = sanitize(text)
     parts = re.split(
         r'(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*]+\*|_[^_]+_)', text)
-    h = size * 0.55
+    h = size * 0.6
     for p in parts:
         if not p:
             continue
@@ -364,31 +388,97 @@ def write_inline(pdf, text, size=10):
 # ══════════════════════════════════════════════════════════════════
 def _calc_col_widths(pdf, rows, font_size):
     num_cols = max(len(r) for r in rows)
-    raw = [0.0] * num_cols
+
+    # 1. Measure max full-content width per column
+    content_w = [0.0] * num_cols
     for row in rows:
         for ci in range(num_cols):
-            cell = strip_md_bold(sanitize(row[ci])) if ci < len(row) else ''
+            cell = strip_md_inline(sanitize(row[ci])) if ci < len(row) else ''
             pdf.set_font("Helvetica", "", font_size)
             w = pdf.get_string_width(cell)
-            raw[ci] = max(raw[ci], w)
-    raw = [w + 6 for w in raw]
-    total = sum(raw) or 1
-    if total <= CONTENT_W:
-        spare = CONTENT_W - total
-        widths = [w + spare / num_cols for w in raw]
+            content_w[ci] = max(content_w[ci], w)
+
+    # 2. Measure the widest single word in each column (header + body).
+    #    This is the absolute minimum to avoid character-level breaking.
+    max_word_w = [0.0] * num_cols
+    for row in rows:
+        for ci in range(num_cols):
+            cell = strip_md_inline(sanitize(row[ci])) if ci < len(row) else ''
+            for word in cell.split():
+                pdf.set_font("Helvetica", "B", font_size)
+                ww = pdf.get_string_width(word)
+                max_word_w[ci] = max(max_word_w[ci], ww)
+
+    # 3. Also measure header text width — headers should ideally not wrap
+    #    unless forced.  Use the lesser of full-header width and 2× word min.
+    header = rows[0] if rows else []
+    header_w = [0.0] * num_cols
+    for ci in range(num_cols):
+        h_text = strip_md_inline(sanitize(header[ci])) if ci < len(header) else ''
+        pdf.set_font("Helvetica", "B", font_size)
+        header_w[ci] = pdf.get_string_width(h_text)
+
+    # Cell inner padding (text_x offset + right pad)
+    PAD = 8
+    # Minimum width = largest single word + padding (prevents char breaking)
+    min_widths = [w + PAD for w in max_word_w]
+    # Preferred width = header width + padding (keeps header on one line)
+    pref_widths = [max(min_widths[i], header_w[i] + PAD) for i in range(num_cols)]
+    # Full width = full content + padding
+    full_widths = [w + PAD + 2 for w in content_w]
+
+    total_full = sum(full_widths) or 1
+    if total_full <= CONTENT_W:
+        # Everything fits — distribute spare evenly
+        spare = CONTENT_W - total_full
+        return [w + spare / num_cols for w in full_widths]
+
+    # Content doesn't fit — need to compress.
+    # Try giving each column its preferred (header-fitting) width first.
+    total_pref = sum(pref_widths)
+    if total_pref >= CONTENT_W:
+        # Even preferred widths exceed page — fall back to minimums + distribute
+        total_min = sum(min_widths)
+        if total_min >= CONTENT_W:
+            # Absolute minimum exceeds page — divide equally (rare, many-col tables)
+            return [CONTENT_W / num_cols] * num_cols
+        remaining = CONTENT_W - total_min
+        extra_need = [max(0, pref_widths[i] - min_widths[i]) for i in range(num_cols)]
+        total_extra = sum(extra_need) or 1
+        widths = [min_widths[i] + extra_need[i] / total_extra * remaining
+                  for i in range(num_cols)]
     else:
-        widths = [w / total * CONTENT_W for w in raw]
-    min_w = max(10, CONTENT_W / num_cols * 0.3)
-    for i in range(num_cols):
-        widths[i] = max(widths[i], min_w)
-    s = sum(widths)
+        # Preferred widths fit — distribute remaining to content-heavy columns
+        remaining = CONTENT_W - total_pref
+        extra_need = [max(0, full_widths[i] - pref_widths[i]) for i in range(num_cols)]
+        total_extra = sum(extra_need) or 1
+        widths = [pref_widths[i] + extra_need[i] / total_extra * remaining
+                  for i in range(num_cols)]
+
+    # Cap any single column at 55% of total to prevent one column dominating
+    max_single = CONTENT_W * 0.55
+    for _pass in range(3):  # iterate a few times to stabilise
+        capped = False
+        for i in range(num_cols):
+            if widths[i] > max_single:
+                excess = widths[i] - max_single
+                widths[i] = max_single
+                others = [j for j in range(num_cols) if j != i]
+                for j in others:
+                    widths[j] += excess / len(others)
+                capped = True
+        if not capped:
+            break
+
+    # Normalise to exactly CONTENT_W
+    s = sum(widths) or 1
     return [w / s * CONTENT_W for w in widths]
 
 
 def _wrap_cell_text(pdf, text, width, font, style, size):
     """Word-wrap text with character-level breaking for long words."""
     pdf.set_font(font, style, size)
-    usable = width - 4
+    usable = width - 6
     if usable <= 0:
         return [text[:20]] if text else [""]
     words = text.split()
@@ -421,12 +511,12 @@ def _wrap_cell_text(pdf, text, width, font, style, size):
 def _draw_table_row(pdf, cells, widths, is_header, font_size, line_h, row_even):
     """Draw one table row, returning its height."""
     num_cols = len(widths)
-    cell_pad = 1.5
+    cell_pad = 2.5
 
     cell_lines = []
     for ci in range(num_cols):
         raw = sanitize(cells[ci]) if ci < len(cells) else ''
-        raw = strip_md_bold(raw)
+        raw = strip_md_inline(raw)
         style = "B" if is_header else ""
         lines = _wrap_cell_text(pdf, raw, widths[ci],
                                 "Helvetica", style, font_size)
@@ -458,10 +548,13 @@ def _draw_table_row(pdf, cells, widths, is_header, font_size, line_h, row_even):
             pdf.set_font("Helvetica", "", font_size)
             pdf.set_text_color(*C_TEXT)
 
-        ty = start_y + cell_pad
+        # Vertically center the text block within the cell
+        text_block_h = len(cell_lines[ci]) * line_h
+        ty = start_y + (row_h - text_block_h) / 2
+        align = "C" if is_header else "L"
         for ln in cell_lines[ci]:
-            pdf.set_xy(x + 2, ty)
-            pdf.cell(w - 4, line_h, ln,
+            pdf.set_xy(x + 3, ty)
+            pdf.cell(w - 6, line_h, ln, align=align,
                      new_x=XPos.RIGHT, new_y=YPos.TOP)
             ty += line_h
         x += w
@@ -481,20 +574,20 @@ def render_table(pdf, rows):
 
     # Adaptive font / line height
     if num_cols <= 3:
-        font_size, line_h = 9, 5
+        font_size, line_h = 9.5, 5.5
     elif num_cols <= 5:
-        font_size, line_h = 8.5, 4.8
+        font_size, line_h = 9, 5.2
     elif num_cols <= 6:
-        font_size, line_h = 8, 4.5
+        font_size, line_h = 8.5, 5
     else:
-        font_size, line_h = 7.5, 4.2
+        font_size, line_h = 7.5, 4.5
 
     widths = _calc_col_widths(pdf, rows, font_size)
     header = rows[0]
 
     # Ensure enough room for at least the header row before starting
     pdf.need_space(line_h + 6)
-    pdf.ln(3)
+    pdf.ln(4)
     _draw_table_row(pdf, header, widths, True, font_size, line_h, False)
 
     for ri in range(1, len(rows)):
@@ -502,12 +595,12 @@ def render_table(pdf, rows):
         # Pre-measure row to check page break
         pre_lines = []
         for ci in range(num_cols):
-            raw = strip_md_bold(sanitize(row[ci] if ci < len(row) else ''))
+            raw = strip_md_inline(sanitize(row[ci] if ci < len(row) else ''))
             pre_lines.append(
                 _wrap_cell_text(pdf, raw, widths[ci],
                                 "Helvetica", "", font_size))
         max_l = max(len(cl) for cl in pre_lines)
-        est_h = max_l * line_h + 3
+        est_h = max_l * line_h + 5
 
         if pdf.usable_y < est_h:
             pdf.add_page()
@@ -519,7 +612,7 @@ def render_table(pdf, rows):
 
     pdf.set_text_color(*C_TEXT)
     pdf.set_draw_color(*C_BLACK)
-    pdf.ln(4)
+    pdf.ln(6)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -636,7 +729,7 @@ def _count_text_lines(pdf, text, width, font, style, size):
 
 
 def render_blockquote(pdf, text):
-    text = sanitize(strip_md_bold(text))
+    text = sanitize(strip_md_inline(text))
 
     qx = LEFT_MARGIN + 2
     qw = CONTENT_W - 4
@@ -716,7 +809,7 @@ def render_blocks(pdf, blocks, md_path):
 
         # ── HEADING ───────────────────────────────────────────────
         if btype == 'heading':
-            level, text = block[1], sanitize(block[2])
+            level, text = block[1], strip_md_inline(sanitize(block[2]))
             sizes = {1: 18, 2: 14, 3: 12, 4: 11, 5: 10, 6: 9.5}
             size = sizes.get(level, 10)
             pdf.need_space(18)
@@ -769,7 +862,7 @@ def render_blocks(pdf, blocks, md_path):
             pdf.set_font("Helvetica", "", 10)
             pdf.set_text_color(*C_TEXT)
             write_inline(pdf, block[1])
-            pdf.ln(5.5)
+            pdf.ln(6)
 
         # ── BULLET ────────────────────────────────────────────────
         elif btype == 'bullet':
@@ -781,9 +874,9 @@ def render_blocks(pdf, blocks, md_path):
             pdf.set_font("Helvetica", "", 10)
             pdf.set_text_color(*C_TEXT)
             pdf.set_x(x)
-            pdf.write(5.5, f"{marker}  ")
+            pdf.write(6, f"{marker}  ")
             write_inline(pdf, text)
-            pdf.ln(4.5)
+            pdf.ln(5)
 
         # ── CHECKBOX ──────────────────────────────────────────────
         elif btype == 'checkbox':
@@ -795,9 +888,9 @@ def render_blocks(pdf, blocks, md_path):
             pdf.set_font("Helvetica", "", 10)
             pdf.set_text_color(*C_TEXT)
             pdf.set_x(x)
-            pdf.write(5.5, f"{marker}  ")
+            pdf.write(6, f"{marker}  ")
             write_inline(pdf, text)
-            pdf.ln(4.5)
+            pdf.ln(5)
 
         # ── NUMBERED LIST ─────────────────────────────────────────
         elif btype == 'numbered':
@@ -808,9 +901,9 @@ def render_blocks(pdf, blocks, md_path):
             pdf.set_font("Helvetica", "", 10)
             pdf.set_text_color(*C_TEXT)
             pdf.set_x(x)
-            pdf.write(5.5, f"{num}. ")
+            pdf.write(6, f"{num}. ")
             write_inline(pdf, text)
-            pdf.ln(4.5)
+            pdf.ln(5)
 
         # ── BLOCKQUOTE ────────────────────────────────────────────
         elif btype == 'quote':

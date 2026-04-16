@@ -64,7 +64,8 @@ SUBNET_NAME = "ibms-subnet"
 CONNECTOR_NAME = "ibms-connector"
 
 DB_USER_PASSWORD = os.getenv("DB_USER_PASSWORD", secrets.token_urlsafe(24))
-MONGO_URI = os.getenv("MONGO_URI", "")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_urlsafe(48))
 
 BASE_URL = "https://compute.googleapis.com/compute/v1"
@@ -83,7 +84,8 @@ class GCPDeployer:
     """Deploys IBMS to GCP using REST APIs."""
 
     def __init__(self):
-        self.client = httpx.Client(timeout=300)
+        transport = httpx.HTTPTransport(retries=5)
+        self.client = httpx.Client(timeout=300, transport=transport)
         self.token: str = ""
         self.project_number: str = ""
 
@@ -181,7 +183,12 @@ class GCPDeployer:
         print(f"    Waiting for {label}...", end="", flush=True)
         start = time.time()
         while time.time() - start < timeout:
-            resp = self.client.get(op_url, headers=self._headers())
+            try:
+                resp = self.client.get(op_url, headers=self._headers(), timeout=30)
+            except (httpx.ConnectError, httpx.ReadError, httpx.WriteError, httpx.PoolTimeout):
+                time.sleep(15)
+                print("r", end="", flush=True)
+                continue
             if resp.status_code != 200:
                 time.sleep(10)
                 continue
@@ -620,22 +627,23 @@ class GCPDeployer:
                             {"name": "RELOAD", "value": "false"},
                             {"name": "LOG_LEVEL", "value": "warning"},
                             {"name": "SECRET_KEY", "value": SECRET_KEY},
+                            {"name": "JWT_SECRET", "value": os.getenv("JWT_SECRET", SECRET_KEY)},
+                            {"name": "GROQ_API_KEY", "value": os.getenv("GROQ_API_KEY", "")},
                             {
                                 "name": "REDIS_URL",
                                 "value": f"redis://{redis_host}:{redis_port}/0",
                             },
                             {
-                                "name": "MARIADB_URI",
-                                "value": f"mysql+aiomysql://ibms_user:{DB_USER_PASSWORD}@{sql_ip}:3306/ibms_enterprise",
+                                "name": "SUPABASE_URL",
+                                "value": SUPABASE_URL,
                             },
                             {
-                                "name": "MONGO_URI",
-                                "value": MONGO_URI or "mongodb://localhost:27017",
+                                "name": "SUPABASE_KEY",
+                                "value": SUPABASE_KEY,
                             },
-                            {"name": "MONGO_DB_NAME", "value": "ibms_enterprise"},
                         ],
                         "startupProbe": {
-                            "httpGet": {"path": "/api/health"},
+                            "httpGet": {"path": "/api/health", "port": 8080},
                             "initialDelaySeconds": 10,
                             "periodSeconds": 5,
                             "failureThreshold": 10,
@@ -714,7 +722,7 @@ class GCPDeployer:
         self.create_artifact_registry()
         self.build_container()
         self.create_vpc()
-        self.create_cloud_sql()
+        # Cloud SQL removed — using Supabase (external)
         self.create_redis()
         self.deploy_cloud_run()
 

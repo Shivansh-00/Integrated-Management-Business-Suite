@@ -1,8 +1,11 @@
 """
 IBMS Database Initialization Script
 =====================================
-Seeds the MongoDB database with default users, decision rules,
+Seeds the Supabase database with default users, decision rules,
 and sample data. Run once after fresh install.
+
+Prerequisites:
+    - Run scripts/supabase_schema.sql in the Supabase SQL editor first.
 
 Usage:
     python -m scripts.init_db
@@ -11,6 +14,7 @@ Usage:
 
 import os
 import sys
+import uuid
 from pathlib import Path
 
 # Ensure the ibms_core package is importable
@@ -22,83 +26,30 @@ if str(_APP_DIR) not in sys.path:
 from dotenv import load_dotenv
 load_dotenv()
 
-from ibms_core.database.connection import get_sync_db, get_sync_collection, MONGO_URI, MONGO_DB_NAME
-from ibms_core.database.models import UserOps, AuditOps
+from supabase import create_client
+
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
 
 def seed_database():
-    """Initialize database with default data."""
-    print(f"Connecting to MongoDB: {MONGO_URI}")
-    print(f"Database: {MONGO_DB_NAME}")
+    """Initialize Supabase database with default data."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        print("ERROR: SUPABASE_URL and SUPABASE_KEY must be set in .env")
+        sys.exit(1)
 
-    db = get_sync_db()
+    print(f"Connecting to Supabase: {SUPABASE_URL}")
+    sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
     # Verify connection
-    db.client.admin.command("ping")
-    print("MongoDB connection successful!\n")
+    sb.table("users").select("user_id", count="exact").limit(0).execute()
+    print("Supabase connection successful!\n")
 
     # ---------------------------------------------------------------
-    # 1. Create collections explicitly (optional but clean)
+    # 1. Seed default users
     # ---------------------------------------------------------------
-    collections_to_create = [
-        "users", "kpi_snapshots", "kpi_latest", "ai_recommendations",
-        "enterprise_profiles", "webhook_logs", "smart_decision_rules",
-        "ai_alerts", "audit_logs", "notifications", "refresh_tokens",
-        "rate_limits", "csrf_tokens",
-    ]
-    existing = db.list_collection_names()
-    for col_name in collections_to_create:
-        if col_name not in existing:
-            db.create_collection(col_name)
-            print(f"  Created collection: {col_name}")
-        else:
-            print(f"  Collection exists:  {col_name}")
-
-    # ---------------------------------------------------------------
-    # 2. Create indexes (sync version)
-    # ---------------------------------------------------------------
-    print("\nCreating indexes...")
-
-    db["users"].create_index("email", unique=True)
-    db["users"].create_index("username", unique=True)
-    db["users"].create_index("role")
-    db["users"].create_index("is_active")
-
-    db["kpi_snapshots"].create_index([("company", 1), ("recorded_at", -1)])
-    db["kpi_snapshots"].create_index("recorded_at")
-
-    db["ai_recommendations"].create_index([("company", 1), ("status", 1), ("generated_at", -1)])
-
-    db["enterprise_profiles"].create_index("user_id", unique=True)
-
-    db["webhook_logs"].create_index([("provider", 1), ("processed", 1), ("received_at", -1)])
-
-    db["smart_decision_rules"].create_index("module")
-
-    db["ai_alerts"].create_index([("severity", 1), ("status", 1)])
-    db["ai_alerts"].create_index("created_at")
-
-    db["audit_logs"].create_index([("event_type", 1), ("timestamp", -1)])
-    db["audit_logs"].create_index("user_id")
-
-    db["notifications"].create_index([("target_user", 1), ("timestamp", -1)])
-
-    db["refresh_tokens"].create_index("token", unique=True)
-    db["refresh_tokens"].create_index("user_id")
-
-    db["rate_limits"].create_index("key", unique=True)
-
-    db["csrf_tokens"].create_index("token", unique=True)
-
-    db["kpi_latest"].create_index("company", unique=True)
-
-    print("  Indexes created successfully!")
-
-    # ---------------------------------------------------------------
-    # 3. Seed default users
-    # ---------------------------------------------------------------
-    print("\nSeeding default users...")
-    from ibms_core.security.auth_engine import hash_password  # noqa: import here after DB is ready
+    print("Seeding default users...")
+    from ibms_core.security.auth_engine import hash_password
 
     seed_users = [
         {"username": "admin",   "email": "admin@ibms.dev",   "password": "Admin@IBMS2026",   "role": "super_admin"},
@@ -106,27 +57,26 @@ def seed_database():
         {"username": "manager", "email": "manager@ibms.dev", "password": "Manager@2026",      "role": "manager"},
     ]
     for u in seed_users:
-        if UserOps.exists_by_username(u["username"]) or UserOps.exists_by_email(u["email"]):
+        existing = sb.table("users").select("user_id").eq("username", u["username"]).maybe_single().execute()
+        if existing.data:
             print(f"  Skipped: {u['username']} (already exists)")
             continue
-        UserOps.create(
-            email=u["email"],
-            username=u["username"],
-            password_hash=hash_password(u["password"]),
-            role=u["role"],
-            is_active=True,
-            is_verified=True,
-        )
-        print(f"  Created: {u['username']} ({u['role']}) — password: {u['password']}")
-    else:
-        print("  Skipped: manager (already exists)")
+        sb.table("users").insert({
+            "user_id": str(uuid.uuid4()),
+            "email": u["email"],
+            "username": u["username"],
+            "password_hash": hash_password(u["password"]),
+            "role": u["role"],
+            "is_active": True,
+            "is_verified": True,
+        }).execute()
+        print(f"  Created: {u['username']} ({u['role']})")
 
     # ---------------------------------------------------------------
-    # 4. Seed smart decision rules
+    # 2. Seed smart decision rules
     # ---------------------------------------------------------------
     print("\nSeeding decision rules...")
 
-    rules_col = db["smart_decision_rules"]
     default_rules = [
         {"rule_name": "High-Value Transaction Review", "module": "Accounting", "threshold": 75.0, "is_enabled": True},
         {"rule_name": "Inventory Reorder Alert", "module": "Inventory", "threshold": 50.0, "is_enabled": True},
@@ -136,30 +86,37 @@ def seed_database():
         {"rule_name": "Asset Depreciation Review", "module": "Assets", "threshold": 60.0, "is_enabled": True},
     ]
     for rule in default_rules:
-        if rules_col.count_documents({"rule_name": rule["rule_name"]}, limit=1) == 0:
-            rules_col.insert_one({**rule, "rule_id": str(__import__("uuid").uuid4())})
-            print(f"  Created rule: {rule['rule_name']}")
-        else:
+        existing = sb.table("smart_decision_rules").select("rule_id").eq("rule_name", rule["rule_name"]).maybe_single().execute()
+        if existing.data:
             print(f"  Skipped rule: {rule['rule_name']} (exists)")
+            continue
+        sb.table("smart_decision_rules").insert({
+            **rule,
+            "rule_id": str(uuid.uuid4()),
+        }).execute()
+        print(f"  Created rule: {rule['rule_name']}")
 
     # ---------------------------------------------------------------
-    # 5. Audit the initialization
+    # 3. Audit the initialization
     # ---------------------------------------------------------------
-    AuditOps.create(
-        event_type="system_init",
-        details={"message": "Database initialized with seed data"},
-    )
+    sb.table("audit_logs").insert({
+        "log_id": str(uuid.uuid4()),
+        "event_type": "system_init",
+        "details": {"message": "Database initialized with seed data"},
+    }).execute()
 
     # ---------------------------------------------------------------
     # Summary
     # ---------------------------------------------------------------
+    user_count = sb.table("users").select("user_id", count="exact").limit(0).execute().count
+    rule_count = sb.table("smart_decision_rules").select("rule_id", count="exact").limit(0).execute().count
+
     print("\n" + "=" * 55)
-    print("  IBMS MongoDB Initialization Complete!")
+    print("  IBMS Supabase Initialization Complete!")
     print("=" * 55)
-    print(f"  Database:     {MONGO_DB_NAME}")
-    print(f"  Collections:  {len(collections_to_create)}")
-    print(f"  Users:        {UserOps.count()}")
-    print(f"  Rules:        {rules_col.count_documents({})}")
+    print(f"  Endpoint:  {SUPABASE_URL}")
+    print(f"  Users:     {user_count}")
+    print(f"  Rules:     {rule_count}")
     print("=" * 55)
 
 
