@@ -17,6 +17,7 @@ env:
   SERVICE_NAME: ibms-web
   REPO_NAME: ibms-docker
   IMAGE: asia-south1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ibms-docker/ibms-web
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
 
@@ -37,10 +38,10 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Lint
-        run: ruff check . --exit-non-zero-on-fix
+        run: ruff check .
 
       - name: Test
-        run: pytest tests/ -q --tb=short
+        run: pytest -q --tb=short
         env:
           SUPABASE_URL: https://test.supabase.co
           SUPABASE_KEY: test-key
