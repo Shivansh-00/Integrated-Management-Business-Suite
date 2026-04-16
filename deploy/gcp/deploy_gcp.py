@@ -626,9 +626,11 @@ class GCPDeployer:
                             {"name": "HOST", "value": "0.0.0.0"},
                             {"name": "RELOAD", "value": "false"},
                             {"name": "LOG_LEVEL", "value": "warning"},
+                            {"name": "COOKIE_SECURE", "value": "true"},
                             {"name": "SECRET_KEY", "value": SECRET_KEY},
                             {"name": "JWT_SECRET", "value": os.getenv("JWT_SECRET", SECRET_KEY)},
                             {"name": "GROQ_API_KEY", "value": os.getenv("GROQ_API_KEY", "")},
+                            {"name": "ALLOWED_ORIGINS", "value": os.getenv("ALLOWED_ORIGINS", "")},
                             {
                                 "name": "REDIS_URL",
                                 "value": f"redis://{redis_host}:{redis_port}/0",

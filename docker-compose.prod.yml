@@ -1,5 +1,5 @@
 # =============================================================================
-# IBMS Enterprise — Production Docker Compose (GCP VM / Docker Host)
+# IBMS Enterprise — Production Docker Compose Override
 # =============================================================================
 # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 # =============================================================================
@@ -8,19 +8,23 @@ version: '3.9'
 
 services:
   web:
-    image: ${GCP_REGISTRY:-asia-south1-docker.pkg.dev/total-handler-463313-e2/ibms-docker}/ibms-web:${IMAGE_TAG:-latest}
+    image: ${REGISTRY:-ghcr.io/shivansh-00}/ibms-web:${IMAGE_TAG:-latest}
     build: {}                              # Disable build in prod — use pre-built image
     environment:
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://${REDIS_PASSWORD:+:${REDIS_PASSWORD}@}redis:6379/0
       - SUPABASE_URL=${SUPABASE_URL:?SUPABASE_URL is required}
       - SUPABASE_KEY=${SUPABASE_KEY:?SUPABASE_KEY is required}
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://ibms.example.com}
+      - COOKIE_SECURE=true
       - HOST=0.0.0.0
       - PORT=8000
       - RELOAD=false
       - LOG_LEVEL=warning
     deploy:
-      replicas: 2
+      replicas: ${REPLICAS:-2}
       resources:
         limits:
           cpus: '2.0'
@@ -31,7 +35,16 @@ services:
       restart_policy:
         condition: on-failure
         delay: 5s
-        max_attempts: 3
+        max_attempts: 5
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   nginx:
     ports:
@@ -39,11 +52,16 @@ services:
       - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./deploy/gcp/ssl:/etc/nginx/ssl:ro
+      - ./deploy/ssl:/etc/nginx/ssl:ro
     deploy:
       resources:
         limits:
           memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
 
   redis:
     ports: []                              # No external port exposure in prod
@@ -53,9 +71,17 @@ services:
       --maxmemory 512mb
       --maxmemory-policy allkeys-lru
       --requirepass ${REDIS_PASSWORD:-}
+      --rename-command FLUSHDB ""
+      --rename-command FLUSHALL ""
+      --rename-command DEBUG ""
     deploy:
       resources:
         limits:
           memory: 768M
         reservations:
           memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"

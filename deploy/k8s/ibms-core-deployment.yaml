@@ -1,11 +1,21 @@
+# =============================================================================
+# IBMS Core — Kubernetes Deployment (FastAPI + Supabase + Redis)
+# =============================================================================
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ibms-core
   labels:
     app: ibms-core
+    version: v2
 spec:
   replicas: 3
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: ibms-core
@@ -13,44 +23,114 @@ spec:
     metadata:
       labels:
         app: ibms-core
+        version: v2
     spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       containers:
-      - name: frappe-backend
+      - name: ibms-web
         image: ghcr.io/shivansh-00/ibms-core:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8000
+          protocol: TCP
         env:
-        - name: FRAPPE_SITE_NAME_HEADER
+        - name: HOST
+          value: "0.0.0.0"
+        - name: PORT
+          value: "8000"
+        - name: RELOAD
+          value: "false"
+        - name: LOG_LEVEL
+          value: "warning"
+        - name: COOKIE_SECURE
+          value: "true"
+        - name: SUPABASE_URL
           valueFrom:
             secretKeyRef:
               name: ibms-secrets
-              key: site_name
-        - name: DB_HOST
+              key: supabase-url
+        - name: SUPABASE_KEY
           valueFrom:
             secretKeyRef:
               name: ibms-secrets
-              key: db_host
-        - name: MARIADB_ROOT_PASSWORD
+              key: supabase-key
+        - name: SECRET_KEY
           valueFrom:
             secretKeyRef:
               name: ibms-secrets
-              key: db_password
+              key: secret-key
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: ibms-secrets
+              key: jwt-secret
+        - name: GROQ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ibms-secrets
+              key: groq-api-key
+              optional: true
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: ibms-secrets
+              key: redis-url
+              optional: true
+        - name: ALLOWED_ORIGINS
+          valueFrom:
+            configMapKeyRef:
+              name: ibms-config
+              key: allowed-origins
+              optional: true
         readinessProbe:
           httpGet:
-            path: /api/method/ping
+            path: /api/health
             port: 8000
-          initialDelaySeconds: 15
+          initialDelaySeconds: 10
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         livenessProbe:
           httpGet:
-            path: /api/method/ping
+            path: /api/health
             port: 8000
-          initialDelaySeconds: 45
+          initialDelaySeconds: 20
           periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /api/health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 12
         resources:
           requests:
-            cpu: "500m"
-            memory: "1Gi"
+            cpu: "250m"
+            memory: "512Mi"
           limits:
             cpu: "2000m"
-            memory: "4Gi"
+            memory: "2Gi"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+              - ALL
+---
+# =============================================================================
+# IBMS Config — Non-sensitive configuration
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ibms-config
+  labels:
+    app: ibms-core
+data:
+  allowed-origins: "https://ibms.example.com"

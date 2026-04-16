@@ -310,9 +310,11 @@ def deploy(image, redis_host, redis_port):
         "JWT_SECRET": JWT_SECRET,
         "HOST": "0.0.0.0",
         "RELOAD": "false",
+        "COOKIE_SECURE": "true",
         "ENVIRONMENT": "production",
         "LOG_LEVEL": "info",
         "GROQ_API_KEY": os.getenv("GROQ_API_KEY", "").strip(),
+        "ALLOWED_ORIGINS": os.getenv("ALLOWED_ORIGINS", ""),
     }
     env_list = [{"name": k, "value": v} for k, v in env_vars.items() if v]
 
