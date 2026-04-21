@@ -13,3 +13,4 @@ server_output.log
 login_resp.json
 token.txt
 *.log
+_deploy_output.txt

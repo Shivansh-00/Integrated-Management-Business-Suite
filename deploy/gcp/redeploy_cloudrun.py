@@ -18,6 +18,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "ibms-secret-key-change-in-production")
 JWT_SECRET = os.getenv("JWT_SECRET", SECRET_KEY)
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+DB_USER_PASSWORD = os.getenv("DB_USER_PASSWORD", "ibms-password-change-me")
 
 SQL_URL = "https://sqladmin.googleapis.com/v1"
 REDIS_URL_API = "https://redis.googleapis.com/v1"

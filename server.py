@@ -141,6 +141,95 @@ ACCESS_TOKEN_TTL = 1800
 REFRESH_TOKEN_TTL = 604800
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+GROQ_PRIMARY_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip() or "llama-3.3-70b-versatile"
+GROQ_FALLBACK_MODEL = "llama-3.1-8b-instant"
+
+IBMS_PROJECT_KNOWLEDGE = """Project architecture knowledge:
+- Entry point: server.py hosts the FastAPI app, REST APIs, WebSocket notifications, auth middleware, KPI refresh, and the Groq copilot endpoint.
+- Backend package: apps/ibms_core contains ERP logic, database adapters, monitoring, security, workflow automation, jobs, events, and APIs.
+- ERP domains: customers, products, orders, invoices, inventory movements, employees, notifications, profiles, AI recommendations, KPI snapshots, alerts, and webhook logs.
+- Data layer: Supabase is the system of record, redis is the cache, and in-memory fallbacks keep core ERP flows working when external services are unavailable.
+- Security layer: JWT auth, refresh rotation, RBAC, TOTP 2FA, CSRF protection, rate limiting, audit events, and device fingerprint validation.
+- Intelligence layer: compliance engine, risk scoring, fraud detection, budget optimizer, digital twin simulation, pricing engine, lead scoring, forecasting, anomaly detection, and KPI analytics.
+- Frontend: frontend/index.html with frontend/static/js/app.js drives the single-page dashboard, charts, ERP views, alerts, and AI copilot interactions.
+- Deployment assets: Dockerfile, docker-compose files, nginx.conf, deploy/k8s manifests, deploy/aws terraform, deploy/gcp scripts, and render.yaml for Render deployment.
+- Operations: /api/health reports service health, /api/metrics exposes counters, and background KPI refresh keeps dashboard data current.
+"""
+
+
+def _project_focus_context(question: str) -> str:
+    q = (question or "").strip().lower()
+    focused_components: list[str] = []
+
+    if any(term in q for term in ("auth", "login", "jwt", "token", "permission", "role", "2fa", "csrf")):
+        focused_components.append(
+            "- Security/auth components: ibms_core.security.auth_engine, jwt_auth, auth_hooks, policies, and zero_trust manage authentication, authorization, token lifecycle, and trust enforcement."
+        )
+    if any(term in q for term in ("customer", "product", "order", "invoice", "employee", "inventory", "erp", "module")):
+        focused_components.append(
+            "- ERP components: ERPSummaryOps plus CustomerOps, ProductOps, OrderOps, InvoiceOps, EmployeeOps, and InventoryMovementOps expose the main ERP module behavior backed by Supabase."
+        )
+    if any(term in q for term in ("dashboard", "kpi", "metric", "forecast", "analytics", "report")):
+        focused_components.append(
+            "- Analytics components: KPIOps, dashboard endpoints, forecasting flows, monitoring.metrics, and background KPI refresh power dashboards, trends, and reporting."
+        )
+    if any(term in q for term in ("risk", "fraud", "compliance", "pricing", "budget", "lead", "twin", "anomaly", "decision")):
+        focused_components.append(
+            "- Decision intelligence components: risk_scoring_engine, compliance_engine, fraud_detection, dynamic_pricing, auto_budget_optimizer, digital_twin, lead scoring, and anomaly services support decision-making workflows."
+        )
+    if any(term in q for term in ("frontend", "ui", "dashboard page", "screen", "client", "browser")):
+        focused_components.append(
+            "- Frontend components: frontend/index.html, frontend/static/js/app.js, frontend/static/css/dashboard.css, and Tailwind assets render the SPA dashboard and copilot UI."
+        )
+    if any(term in q for term in ("deploy", "docker", "render", "k8s", "kubernetes", "cloud", "nginx", "terraform")):
+        focused_components.append(
+            "- Deployment components: Dockerfile, docker-compose files, nginx.conf, deploy/k8s manifests, render.yaml, and cloud-specific scripts under deploy/aws and deploy/gcp define runtime and infrastructure behavior."
+        )
+    if any(term in q for term in ("webhook", "event", "notification", "integration", "stream")):
+        focused_components.append(
+            "- Integration/event components: events/event_router, publisher, stream_processor, subscriber, NotificationOps, and webhook APIs coordinate events and outbound or inbound integrations."
+        )
+
+    if not focused_components:
+        focused_components.append(
+            "- Cross-project view: answer using the complete IBMS stack, including FastAPI APIs, ibms_core services, Supabase data models, Redis caching, frontend dashboard assets, and deployment manifests."
+        )
+
+    return "\n".join(focused_components)
+
+
+def _build_copilot_system_context(question: str, kpi: dict[str, Any], erp_context: str) -> str:
+    return f"""You are the IBMS AI Copilot for the Integrated Management Business Suite.
+
+Your job is to answer with precise knowledge of both:
+1. Live business state from KPI and ERP data.
+2. Project architecture knowledge across the full repository.
+
+Live business data:
+- Revenue Run Rate: ₹{kpi.get('revenue_run_rate', 0):,.0f}
+- Net Margin: {kpi.get('net_margin', 0)}%
+- Risk Exposure: {kpi.get('risk_exposure', 0)}%
+- Forecast Accuracy: {kpi.get('forecast_accuracy', 0)}%
+- Compliance Score: {kpi.get('compliance_score', 0)}%
+- Budget Variance: {kpi.get('budget_variance', 0)}%
+- Revenue Growth: {kpi.get('revenue_growth', 0)}%
+- Active Risk Alerts: {kpi.get('active_alerts', 0)}
+{erp_context}
+
+{IBMS_PROJECT_KNOWLEDGE}
+
+Question-specific component focus:
+{_project_focus_context(question)}
+
+Response rules:
+- Use live KPI and ERP facts first for operational questions.
+- Use project architecture knowledge for questions about components, APIs, modules, data flow, security, UI, or deployment.
+- Reference specific modules or subsystems when relevant.
+- Do not invent files, endpoints, services, metrics, or database entities.
+- If a fact is unavailable from live data, say that explicitly.
+- Keep answers concise but complete, with bullet points when listing multiple items.
+- End with concrete next actions when the user asks for analysis, diagnosis, or recommendations.
+"""
 
 # ---------------------------------------------------------------------------
 # Redis helper
@@ -965,7 +1054,7 @@ async def copilot_ask(req: CopilotRequest):
         return {"question": req.question, "answer": "AI Copilot is not configured. Please set the GROQ_API_KEY environment variable.", "confidence": 0.0, "sources": ["system"]}
 
     # Gather real-time business context
-    kpi = _kpi_store.get("Default Company", {})
+    kpi = _kpi_store.get("Default Company") or await refresh_kpis("Default Company")
 
     # Gather live ERP dataset for richer AI context
     erp_context = ""
@@ -986,53 +1075,51 @@ Live ERP Dataset (from Supabase):
     except Exception:
         erp_context = "\nLive ERP data unavailable."
 
-    system_context = f"""You are the IBMS AI Copilot — an intelligent business analyst assistant for an Integrated Management Business Suite (ERP platform).
-
-You have access to real-time business data:
-- Revenue Run Rate: ₹{kpi.get('revenue_run_rate', 0):,.0f}
-- Net Margin: {kpi.get('net_margin', 0)}%
-- Risk Exposure: {kpi.get('risk_exposure', 0)}%
-- Forecast Accuracy: {kpi.get('forecast_accuracy', 0)}%
-- Compliance Score: {kpi.get('compliance_score', 0)}%
-- Budget Variance: {kpi.get('budget_variance', 0)}%
-- Revenue Growth: {kpi.get('revenue_growth', 0)}%
-- Active Risk Alerts: {kpi.get('active_alerts', 0)}
-{erp_context}
-
-The platform includes these ERP modules: Customers, Products, Orders, Invoices, Inventory, Employees.
-It also has: KPI Dashboard, Sales Forecasting (Prophet model), Risk Scoring, Fraud Detection, Compliance Engine, Budget Optimizer, Digital Twin Simulation, and Pricing Engine.
-
-Provide concise, actionable business insights. Use the real-time data above when relevant. Format responses clearly with bullet points when listing multiple items. Always suggest next steps or recommended actions."""
+    system_context = _build_copilot_system_context(req.question, kpi, erp_context)
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {GROQ_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "llama-3.1-8b-instant",
-                    "messages": [
-                        {"role": "system", "content": system_context},
-                        {"role": "user", "content": req.question},
-                    ],
-                    "temperature": 0.7,
-                    "max_tokens": 1024,
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            data = None
+            model_used = GROQ_PRIMARY_MODEL
+            for model_name in [GROQ_PRIMARY_MODEL, GROQ_FALLBACK_MODEL]:
+                try:
+                    resp = await client.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {GROQ_API_KEY}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": model_name,
+                            "messages": [
+                                {"role": "system", "content": system_context},
+                                {"role": "user", "content": req.question},
+                            ],
+                            "temperature": 0.2,
+                            "max_tokens": 1024,
+                        },
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    model_used = data.get("model", model_name)
+                    break
+                except httpx.HTTPStatusError as exc:
+                    if exc.response.status_code == 400 and model_name != GROQ_FALLBACK_MODEL:
+                        logger.warning("Groq model %s rejected request, retrying with fallback model", model_name)
+                        continue
+                    raise
+
+            if data is None:
+                raise RuntimeError("Groq API returned no completion payload")
+
             answer = data["choices"][0]["message"]["content"]
-            model_used = data.get("model", "llama-3.1-8b-instant")
             usage = data.get("usage", {})
 
             return {
                 "question": req.question,
                 "answer": answer,
-                "confidence": 0.92,
-                "sources": ["groq_llm", model_used, "real_time_kpi"],
+                "confidence": 0.94,
+                "sources": ["groq_llm", model_used, "real_time_kpi", "project_architecture"],
                 "tokens_used": usage.get("total_tokens", 0),
             }
     except httpx.HTTPStatusError as exc:
