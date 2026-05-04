@@ -1,0 +1,91 @@
+%%{init: {'theme': 'default'}}%%
+flowchart LR
+    classDef actor fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px,color:#0f172a
+    classDef uc    fill:#fef9c3,stroke:#ca8a04,stroke-width:1.5px,color:#0f172a
+
+    ExecActor([Executive])
+    FinActor([Finance Manager])
+    OpsActor([Operations Manager])
+    CompActor([Compliance Officer])
+    AdminActor([System Admin])
+    ExtActor([External Partner])
+
+    subgraph IBMS[IBMS System]
+        direction TB
+
+        subgraph AUTH[Authentication]
+            UC_Login[Login]
+            UC_2FA[Verify 2FA]
+        end
+
+        subgraph ERP[ERP Operations]
+            UC_ManCust[Manage Customers]
+            UC_ManProd[Manage Products]
+            UC_ManInv[Record Inventory]
+            UC_CreateOrder[Create Order]
+            UC_GenInv[Generate Invoice]
+            UC_RecPay[Record Payment]
+        end
+
+        subgraph ANALYTICS[Analytics]
+            UC_KPI[View KPI Dashboard]
+            UC_Risk[Run Risk Assessment]
+            UC_Forecast[View Forecast]
+            UC_AI[Get AI Insights]
+        end
+
+        subgraph COMPLIANCE[Compliance]
+            UC_CompCheck[Run Compliance Check]
+            UC_AuditLog[View Audit Log]
+            UC_ApproveInv[Approve Invoice]
+        end
+
+        subgraph ADMIN[Administration]
+            UC_ManUsers[Manage Users]
+            UC_ViewMetrics[View Metrics]
+        end
+    end
+
+    ExecActor  --> UC_Login
+    FinActor   --> UC_Login
+    OpsActor   --> UC_Login
+    CompActor  --> UC_Login
+    AdminActor --> UC_Login
+    ExtActor   --> UC_Login
+    UC_Login   -.->|include| UC_2FA
+
+    OpsActor  --> UC_ManCust
+    OpsActor  --> UC_ManProd
+    OpsActor  --> UC_ManInv
+    OpsActor  --> UC_CreateOrder
+    FinActor  --> UC_GenInv
+    FinActor  --> UC_RecPay
+    UC_CreateOrder -.->|include| UC_GenInv
+    UC_GenInv      -.->|extend| UC_ApproveInv
+
+    ExecActor  --> UC_KPI
+    ExecActor  --> UC_AI
+    FinActor   --> UC_Forecast
+    OpsActor   --> UC_Risk
+    UC_KPI     -.->|include| UC_Risk
+
+    CompActor  --> UC_CompCheck
+    CompActor  --> UC_AuditLog
+    CompActor  --> UC_ApproveInv
+
+    AdminActor --> UC_ManUsers
+    AdminActor --> UC_ViewMetrics
+
+    ExtActor   --> UC_KPI
+
+    class ExecActor,FinActor,OpsActor,CompActor,AdminActor,ExtActor actor
+    class UC_Login,UC_2FA,UC_ManCust,UC_ManProd,UC_ManInv,UC_CreateOrder,UC_GenInv,UC_RecPay uc
+    class UC_KPI,UC_Risk,UC_Forecast,UC_AI,UC_CompCheck,UC_AuditLog,UC_ApproveInv uc
+    class UC_ManUsers,UC_ViewMetrics uc
+
+    ExtActor   -->|uses| UC_KPI
+
+    class ExecActor,FinActor,OpsActor,CompActor,AdminActor,ExtActor actor
+    class UC_Login,UC_2FA,UC_ManCust,UC_ManProd,UC_ManInv,UC_CreateOrder,UC_GenInv,UC_RecPay uc
+    class UC_KPI,UC_Risk,UC_Forecast,UC_AI,UC_Copilot,UC_CompCheck,UC_AuditLog,UC_ApproveInv uc
+    class UC_ManUsers,UC_ViewMetrics,UC_CfgSecurity uc

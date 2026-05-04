@@ -930,3 +930,140 @@ def disable_2fa(user_id: str) -> bool:
             _users_fallback[user_id]["totp_secret"] = None
     audit_event("2fa_disabled", user_id=user_id)
     return True
+
+
+def google_auth_login(
+    google_id: str,
+    email: str,
+    name: str,
+    avatar_url: str,
+    jwt_secret: str,
+    ip: str = "",
+    device_fp: str = "",
+) -> AuthResult:
+    """
+    Authenticate (or auto-register) a user via Google OAuth.
+
+    Lookup order:
+      1. Existing user with matching google_id → login directly.
+      2. Existing user with matching email → link Google account, then login.
+      3. No match → create a new account with auth_provider='google'.
+    """
+    user: dict | None = None
+
+    # 1. Look up by google_id
+    try:
+        user = UserOps.find_by_google_id(google_id)
+    except Exception:
+        # Fallback: scan in-memory users
+        for u in _users_fallback.values():
+            if u.get("google_id") == google_id:
+                user = u
+                break
+
+    # 2. Look up by email (link Google to existing account)
+    if user is None:
+        try:
+            user = UserOps.find_by_email(email)
+            if user:
+                try:
+                    UserOps.link_google_account(user["user_id"], google_id, avatar_url)
+                    user["google_id"] = google_id
+                    user["avatar_url"] = avatar_url
+                except Exception:
+                    if user["user_id"] in _users_fallback:
+                        _users_fallback[user["user_id"]]["google_id"] = google_id
+                        _users_fallback[user["user_id"]]["avatar_url"] = avatar_url
+        except Exception:
+            uid = _user_by_email_fallback.get(email)
+            if uid:
+                user = _users_fallback.get(uid)
+
+    # 3. Auto-register new Google user
+    if user is None:
+        base_username = email.split("@")[0]
+        username = base_username
+        suffix = 1
+        while True:
+            try:
+                exists = UserOps.exists_by_username(username)
+            except Exception:
+                exists = username in _user_by_username_fallback
+            if not exists:
+                break
+            username = f"{base_username}{suffix}"
+            suffix += 1
+
+        try:
+            user = UserOps.create_google_user(
+                google_id=google_id,
+                email=email,
+                username=username,
+                avatar_url=avatar_url,
+                role="viewer",
+            )
+        except Exception:
+            # In-memory fallback
+            user_id = str(uuid.uuid4())
+            user = {
+                "user_id": user_id,
+                "email": email,
+                "username": username,
+                "password_hash": "",
+                "google_id": google_id,
+                "avatar_url": avatar_url,
+                "auth_provider": "google",
+                "role": "viewer",
+                "is_active": True,
+                "is_verified": True,
+                "totp_secret": None,
+                "totp_enabled": False,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "last_login": None,
+                "failed_attempts": 0,
+            }
+            _users_fallback[user_id] = user
+            _user_by_email_fallback[email] = user_id
+            _user_by_username_fallback[username] = user_id
+
+    if not user.get("is_active", True):
+        audit_event("google_login_failed", ip=ip, details={"reason": "account_disabled", "email": email})
+        return AuthResult(success=False, error="Account is disabled")
+
+    user_id = user["user_id"]
+    role = user.get("role", "viewer")
+    permissions = list(resolve_permissions(role))
+
+    access_token = create_jwt(
+        {
+            "sub": user_id,
+            "username": user["username"],
+            "email": user["email"],
+            "role": role,
+            "permissions": permissions,
+            "avatar_url": user.get("avatar_url", ""),
+        },
+        jwt_secret,
+        TokenType.ACCESS,
+        ttl=1800,
+    )
+
+    refresh_token = issue_refresh_token(user_id, device_fp)
+    csrf_token = generate_csrf_token(user_id)
+
+    try:
+        UserOps.record_login(user_id)
+    except Exception:
+        pass
+
+    audit_event("google_login_success", user_id=user_id, ip=ip, details={"email": email})
+
+    return AuthResult(
+        success=True,
+        user_id=user_id,
+        access_token=access_token,
+        refresh_token=refresh_token,
+        csrf_token=csrf_token,
+        role=role,
+        permissions=permissions,
+    )

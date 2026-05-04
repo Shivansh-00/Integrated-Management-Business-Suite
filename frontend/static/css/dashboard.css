@@ -392,6 +392,41 @@ body::before { content: none; }
 .btn--block { width: 100%; }
 .btn--success { background: var(--success); color: white; }
 .btn--danger { background: var(--danger); color: white; }
+.btn--google {
+    background: #fff;
+    color: #3c4043;
+    border: 1px solid #dadce0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    font-weight: var(--weight-medium);
+    box-shadow: 0 1px 3px rgba(60,64,67,.15);
+}
+.btn--google:hover {
+    background: #f8f9fa;
+    border-color: #c6c6c6;
+    box-shadow: 0 2px 6px rgba(60,64,67,.2);
+    transform: translateY(-1px);
+}
+.btn--google svg { flex-shrink: 0; }
+
+/* Auth divider */
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin: var(--space-4) 0;
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+}
+.auth-divider::before,
+.auth-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border-secondary);
+}
 
 /* === Form Elements === */
 .form-row { margin-bottom: var(--space-4); }

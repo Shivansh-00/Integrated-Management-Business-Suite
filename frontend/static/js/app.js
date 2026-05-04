@@ -328,6 +328,57 @@ const IBMS = (() => {
             return false;
         },
 
+        loginWithGoogle() {
+            window.location.href = "/api/auth/google";
+        },
+
+        async handleGoogleCallback() {
+            const params = new URLSearchParams(window.location.search);
+            const accessToken = params.get("access_token");
+            const error = params.get("error");
+
+            if (!accessToken && !error) return false;
+
+            // Clean the URL immediately
+            window.history.replaceState({}, "", "/");
+
+            if (error) {
+                const msgs = {
+                    google_not_configured: "Google sign-in is not configured on this server.",
+                    google_cancelled: "Google sign-in was cancelled.",
+                    invalid_state: "Security check failed. Please try again.",
+                    google_token_error: "Could not complete Google sign-in. Please retry.",
+                    google_userinfo_error: "Could not retrieve your Google profile. Please retry.",
+                    google_login_failed: "Google sign-in failed. Please retry or use email/password.",
+                };
+                toast.show(msgs[error] || "Google sign-in failed. Please try again.", "error");
+                return false;
+            }
+
+            if (accessToken) {
+                state.accessToken = accessToken;
+                // Verify the token and load user from /api/auth/me
+                const data = await api.get("/api/auth/me", { retries: 1, silent: true });
+                if (data?.success && data.data) {
+                    state.user = {
+                        id: data.data.user_id || data.data.username,
+                        role: data.data.role,
+                        permissions: data.data.permissions,
+                        username: data.data.username,
+                        email: data.data.email,
+                    };
+                    this._enterApp();
+                    toast.show("Welcome!", `Signed in with Google as ${state.user.username || state.user.email}`, "success");
+                    return true;
+                }
+                // Token invalid
+                state.accessToken = null;
+                toast.show("Sign-in Error", "Could not verify session. Please try again.", "error");
+                return false;
+            }
+            return false;
+        },
+
         showLogin() {
             $("loginForm").classList.remove("hidden");
             $("registerForm").classList.add("hidden");
@@ -1899,6 +1950,10 @@ const IBMS = (() => {
         initPasswordStrength();
         initResponsive();
         motionEffects.init();
+
+        // Handle Google OAuth callback (checks ?access_token= in URL)
+        const googleHandled = await auth.handleGoogleCallback();
+        if (googleHandled) return;
 
         // Try to restore session from HttpOnly cookies
         const hasSession = await auth.checkSession();

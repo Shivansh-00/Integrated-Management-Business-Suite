@@ -129,6 +129,54 @@ class UserOps:
         return (result.count or 0) > 0
 
     @staticmethod
+    def find_by_google_id(google_id: str) -> dict | None:
+        """Find a user by their Google OAuth subject ID."""
+        result = UserOps._table().select("*").eq("google_id", google_id).limit(1).execute()
+        return _first_or_none(result)
+
+    @staticmethod
+    def create_google_user(*, google_id: str, email: str, username: str,
+                           avatar_url: str = "", role: str = "viewer") -> dict:
+        """Create a user authenticated via Google OAuth (no password)."""
+        user_id = _new_id()
+        doc = {
+            "user_id": user_id,
+            "email": email,
+            "username": username,
+            "password_hash": "",
+            "google_id": google_id,
+            "avatar_url": avatar_url,
+            "auth_provider": "google",
+            "role": role,
+            "is_active": True,
+            "is_verified": True,
+            "totp_secret": None,
+            "totp_enabled": False,
+            "created_at": _now_iso(),
+            "last_login": _now_iso(),
+            "failed_attempts": 0,
+        }
+        try:
+            result = UserOps._table().insert(doc).execute()
+            return result.data[0] if result.data else doc
+        except Exception as e:
+            err_str = str(e)
+            if "duplicate" in err_str.lower() or "23505" in err_str:
+                existing = UserOps.find_by_email(email)
+                if existing:
+                    return existing
+            raise
+
+    @staticmethod
+    def link_google_account(user_id: str, google_id: str, avatar_url: str = ""):
+        """Link an existing user account to a Google identity."""
+        UserOps._table().update({
+            "google_id": google_id,
+            "avatar_url": avatar_url,
+            "auth_provider": "google",
+        }).eq("user_id", user_id).execute()
+
+    @staticmethod
     def count() -> int:
         result = UserOps._table().select("user_id", count="exact").execute()
         return result.count or 0

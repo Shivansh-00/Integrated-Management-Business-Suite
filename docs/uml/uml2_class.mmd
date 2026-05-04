@@ -1,0 +1,88 @@
+%%{init: {'theme': 'default'}}%%
+classDiagram
+    direction TB
+
+    class User {
+        +String id
+        +String email
+        +String role
+        +login() Token
+        +verify_mfa() Boolean
+    }
+
+    class Customer {
+        +String id
+        +String name
+        +String email
+        +String company
+        +create() Customer
+        +update() Customer
+        +delete() void
+    }
+
+    class Product {
+        +String id
+        +String name
+        +String sku
+        +Float unit_price
+        +Integer quantity
+        +Integer reorder_threshold
+        +is_low_stock() Boolean
+    }
+
+    class InventoryMovement {
+        +String product_id
+        +String type
+        +Integer quantity
+        +DateTime created_at
+        +record() void
+    }
+
+    class Order {
+        +String id
+        +String customer_id
+        +String status
+        +Float total_amount
+        +confirm() void
+        +ship() void
+        +cancel() void
+    }
+
+    class OrderLineItem {
+        +String order_id
+        +String product_id
+        +Integer quantity
+        +Float subtotal
+    }
+
+    class Invoice {
+        +String id
+        +Float amount
+        +String status
+        +Boolean compliance_hold
+        +generate() Invoice
+        +mark_paid() void
+    }
+
+    class Payment {
+        +String invoice_id
+        +Float amount
+        +String payment_method
+        +DateTime payment_date
+        +confirm() void
+    }
+
+    class ComplianceEngine {
+        +Float THRESHOLD
+        +check(invoice) Result
+        +release_hold() void
+    }
+
+    User --> Order : manages
+    Customer "1" --> "0..*" Order : places
+    Order "1" *-- "1..*" OrderLineItem : contains
+    OrderLineItem --> Product : references
+    Product "1" --> "0..*" InventoryMovement : tracked by
+    Order --> Invoice : generates
+    Invoice --> Payment : settled by
+    Invoice ..> ComplianceEngine : checks

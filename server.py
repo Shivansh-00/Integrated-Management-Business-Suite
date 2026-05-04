@@ -32,7 +32,7 @@ from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from dotenv import load_dotenv
 
@@ -74,6 +74,7 @@ from ibms_core.risk_scoring_engine import composite_risk_score
 from ibms_core.security.auth_engine import (
     authenticate,
     register_user,
+    google_auth_login,
     get_user_profile,
     setup_2fa,
     confirm_2fa,
@@ -95,7 +96,13 @@ from ibms_core.security.auth_engine import (
     check_password_strength,
     ROLE_HIERARCHY,
 )
-from ibms_core.security.oauth_provider import get_oauth_provider_config
+from ibms_core.security.oauth_provider import (
+    get_oauth_provider_config,
+    generate_google_auth_url,
+    validate_oauth_state,
+    exchange_google_code,
+    get_google_user_info,
+)
 from ibms_core.services.dynamic_pricing import suggest_price
 from ibms_core.services.fraud_detection import detect_fraud, isolation_forest_score
 from ibms_core.services.decision_engine import evaluate_document
@@ -704,7 +711,8 @@ async def login(req: LoginRequest, request: Request, response: Response):
     resp.set_cookie(key="ibms_access_token", value=result.access_token, httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=ACCESS_TOKEN_TTL, path="/")
     resp.set_cookie(key="ibms_refresh_token", value=result.refresh_token, httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=REFRESH_TOKEN_TTL, path="/api/auth/refresh")
     # Fire-and-forget: don't block login response on notification persistence
-    asyncio.create_task(push_notification("Login Successful", f"User {req.username} logged in", "info", result.user_id))
+    _notif_task = asyncio.create_task(push_notification("Login Successful", f"User {req.username} logged in", "info", result.user_id))
+    _notif_task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
     return resp
 
 
@@ -1156,6 +1164,78 @@ async def oauth_config():
     return get_oauth_provider_config()
 
 
+@app.get("/api/auth/google")
+async def google_auth_redirect():
+    """Redirect the browser to Google's OAuth consent screen."""
+    from ibms_core.security.oauth_provider import GOOGLE_CLIENT_ID
+    if not GOOGLE_CLIENT_ID:
+        from fastapi.responses import RedirectResponse as _RR
+        return _RR("/?error=google_not_configured")
+    url = generate_google_auth_url()
+    from fastapi.responses import RedirectResponse as _RR
+    return _RR(url)
+
+
+@app.get("/api/auth/google/callback")
+async def google_auth_callback(
+    request: Request,
+    code: str = "",
+    state: str = "",
+    error: str = "",
+):
+    """Handle Google's redirect after user consent."""
+    from fastapi.responses import RedirectResponse as _RR
+
+    if error:
+        logger.warning("Google OAuth error returned: %s", error)
+        return _RR("/?error=google_cancelled")
+
+    if not code or not state:
+        return _RR("/?error=invalid_request")
+
+    if not validate_oauth_state(state):
+        logger.warning("Google OAuth invalid/expired state")
+        return _RR("/?error=invalid_state")
+
+    try:
+        token_data = await exchange_google_code(code)
+    except Exception as exc:
+        logger.error("Google token exchange failed: %s", exc)
+        return _RR("/?error=google_token_error")
+
+    try:
+        guser = await get_google_user_info(token_data["access_token"])
+    except Exception as exc:
+        logger.error("Google userinfo fetch failed: %s", exc)
+        return _RR("/?error=google_userinfo_error")
+
+    google_id = guser.get("sub", "")
+    email = guser.get("email", "")
+    if not google_id or not email:
+        return _RR("/?error=google_missing_fields")
+
+    ip = request.client.host if request.client else ""
+    result = google_auth_login(
+        google_id=google_id,
+        email=email,
+        name=guser.get("name", ""),
+        avatar_url=guser.get("picture", ""),
+        jwt_secret=JWT_SECRET,
+        ip=ip,
+    )
+
+    if not result.success:
+        err = (result.error or "auth_failed").replace(" ", "_")
+        return _RR(f"/?error={err}")
+
+    import urllib.parse as _up
+    params = _up.urlencode({
+        "access_token": result.access_token,
+        "refresh_token": result.refresh_token,
+    })
+    return _RR(f"/?{params}")
+
+
 @app.post("/api/auth/token")
 async def get_token_legacy(subject: str = "admin"):
     from ibms_core.security.jwt_auth import issue_token
@@ -1207,12 +1287,12 @@ class CustomerUpdateRequest(BaseModel):
     phone: str = ""
     company: str = ""
     segment: str = ""
-    credit_limit: float = None
+    credit_limit: Optional[float] = None
     address: str = ""
     city: str = ""
     country: str = ""
-    is_active: bool = None
-    position: str = None  # alias for designation (backward compat)
+    is_active: Optional[bool] = None
+    position: Optional[str] = None  # alias for designation (backward compat)
 
 
 @app.get("/api/erp/customers")
@@ -1299,13 +1379,13 @@ class ProductCreateRequest(BaseModel):
 class ProductUpdateRequest(BaseModel):
     name: str = ""
     category: str = ""
-    unit_price: float = None
-    cost_price: float = None
-    tax_rate: float = None
-    stock_quantity: int = None
-    reorder_level: int = None
+    unit_price: Optional[float] = None
+    cost_price: Optional[float] = None
+    tax_rate: Optional[float] = None
+    stock_quantity: Optional[int] = None
+    reorder_level: Optional[int] = None
     description: str = ""
-    is_active: bool = None
+    is_active: Optional[bool] = None
 
 
 @app.get("/api/erp/products")
@@ -1384,7 +1464,7 @@ class OrderItemInput(BaseModel):
 
 class StatusUpdateRequest(BaseModel):
     status: str
-    paid_amount: float = None
+    paid_amount: Optional[float] = None
 
 
 class OrderCreateRequest(BaseModel):
@@ -1546,8 +1626,8 @@ class EmployeeUpdateRequest(BaseModel):
     department: str = ""
     position: str = ""
     designation: str = ""
-    salary: float = None
-    is_active: bool = None
+    salary: Optional[float] = None
+    is_active: Optional[bool] = None
 
 
 @app.get("/api/erp/employees")

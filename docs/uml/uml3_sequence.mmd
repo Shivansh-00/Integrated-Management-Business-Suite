@@ -1,0 +1,56 @@
+%%{init: {'theme': 'default'}}%%
+sequenceDiagram
+    autonumber
+
+    actor Client as Manager
+    participant API  as FastAPI
+    participant AUTH as Auth
+    participant OS   as OrderService
+    participant IS   as InvoiceService
+    participant CE   as ComplianceEngine
+    participant PS   as PaymentService
+    participant DB   as Database
+    participant WS   as WebSocket
+
+    Note over Client, AUTH: Step 1 - Login
+    Client ->> API  : POST /auth/login
+    API    ->> DB   : Lookup user
+    DB     -->> API : User record
+    API    -->> Client : 200 OK - JWT token
+
+    Note over Client, DB: Step 2 - Create Order
+    Client ->> API  : POST /orders
+    API    ->> AUTH : Validate JWT
+    AUTH   -->> API : OK - role: manager
+    API    ->> OS   : create_order(items)
+    OS     ->> DB   : Insert order + line items
+    OS     ->> DB   : Update product stock
+    DB     -->> OS  : order_id created
+    OS     -->> API : Order created
+    API    -->> Client : 201 Created
+
+    Note over Client, DB: Step 3 - Confirm and Invoice
+    Client ->> API  : PATCH /orders/confirm
+    API    ->> OS   : confirm_order()
+    OS     ->> IS   : generate_invoice()
+    IS     ->> DB   : Insert invoice
+
+    alt amount over 500000
+        IS  ->> CE  : check_compliance()
+        CE  -->> IS : hold = true
+        IS  ->> DB  : Set compliance_hold
+        API -->> Client : Invoice pending approval
+    else amount under 500000
+        IS  -->> OS : Invoice issued
+        API -->> Client : 200 OK - Invoice issued
+    end
+
+    Note over Client, WS: Step 4 - Record Payment
+    Client ->> API  : POST /payments
+    API    ->> PS   : record_payment()
+    PS     ->> DB   : Insert payment + mark invoice paid
+    DB     -->> PS  : Payment saved
+    PS     -->> API : Confirmed
+    API    ->> WS   : Broadcast KPI update
+    WS    -->> Client : Dashboard refresh
+    API    -->> Client : 201 Created - receipt
